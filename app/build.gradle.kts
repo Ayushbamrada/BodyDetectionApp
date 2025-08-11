@@ -38,44 +38,62 @@ android {
     buildFeatures {
         compose = true
     }
+    // Added for ML Kit model integration to prevent compression of .tflite files
+    aaptOptions {
+        noCompress("tflite")
+    }
 }
 
 dependencies {
 
     implementation(libs.androidx.core.ktx)
+    // Keep libs.androidx.lifecycle.runtime.ktx as it's defined in your libs.versions.toml
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
+    implementation(platform(libs.androidx.compose.bom)) // Keep the Compose BOM for consistent versions
+    implementation(libs.androidx.ui) // Will use version from BOM
+    implementation(libs.androidx.ui.graphics) // Will use version from BOM
+    implementation(libs.androidx.ui.tooling.preview) // Will use version from BOM
+    implementation(libs.androidx.material3) // Will use version from BOM
 
-    // CameraX dependencies - Update to 1.3.1 (stable) or 1.3.0-beta02 if 1.3.0 doesn't resolve
-    // You are using 1.3.0 for core, camera2, lifecycle, view. Let's keep these consistent.
-    // However, camera-mlkit-vision had specific issues with 1.3.0. Let's use 1.4.2 stable or a beta.
-    implementation("androidx.camera:camera-core:1.3.1") // Consider using 1.3.1 or a newer stable version
+    // CameraX dependencies (Keeping your specified versions as requested)
+    implementation("androidx.camera:camera-core:1.3.1")
     implementation("androidx.camera:camera-camera2:1.3.1")
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
-    implementation("androidx.camera:camera-mlkit-vision:1.4.2") // Updated to latest stable version
-    // If you explicitly want to target 1.3.x for everything, then use:
-    // implementation("androidx.camera:camera-mlkit-vision:1.3.0-beta02") // This was the last beta for 1.3.x
+    implementation("androidx.camera:camera-mlkit-vision:1.4.2")
 
-    // ML Kit Pose Detection Accurate - **Crucial Update**
-    implementation("com.google.mlkit:pose-detection-accurate:18.0.0-beta5") // Updated to the latest beta version that resolves
+    // ML Kit Pose Detection Accurate (Keeping your specified beta version as requested)
+    implementation("com.google.mlkit:pose-detection-accurate:18.0.0-beta5")
 
-    // Mediapipe
+    // MediaPipe (Keeping your specified version as requested)
     implementation("com.google.mediapipe:tasks-vision:0.10.26")
+    // IMPORTANT: For PoseLandmarker, you usually need the specific artifact.
+    // The previously commented out line `tasks-vision-poselandmarker:0.10.11` is old.
+    // If you are using `PoseLandmarkerResult` directly, you need this:
+//    implementation("com.google.mediapipe:tasks-vision-poselandmarker:0.10.26") // Align version with tasks-vision.
 
-    // Jetpack Compose
-    implementation("androidx.compose.ui:ui:1.6.0")
-    implementation("androidx.compose.material3:material3:1.2.0")
-    implementation("androidx.navigation:navigation-compose:2.7.5")
+    // ViewModel utilities for Compose
+    // Keeping this version as requested, it's the one that provides `collectAsState`.
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    // Keep kotlinx-coroutines-android for coroutine dispatchers and scope support
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // Lifecycle
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
+    // Coil (for image loading - keeping your specified version)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // --- REMOVED DUPLICATE AND CONFLICTING DEPENDENCIES ---
+    // Removed: implementation("androidx.compose.ui:ui:1.6.0") // Conflicts with BOM
+    // Removed: implementation("androidx.compose.material3:material3:1.2.0") // Conflicts with BOM
+    // Removed: implementation("androidx.navigation:navigation-compose:2.7.5") // Duplicate of 2.7.7
+    // Removed: implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2") // Duplicate/Older of libs.androidx.lifecycle.runtime.ktx
+    // Removed: implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2") // Duplicate/Older of 2.7.0
+
+    // Jetpack Compose Navigation: You had 2.7.7 commented out and 2.7.5 active.
+    // For consistency and newer features, you should use one. I'll uncomment and activate 2.7.7.
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    // Testing dependencies
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
