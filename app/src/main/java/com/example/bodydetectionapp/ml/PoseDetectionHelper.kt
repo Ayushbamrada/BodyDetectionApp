@@ -3,7 +3,7 @@ package com.example.bodydetectionapp.ml
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import com.example.bodydetectionapp.utils.AngleCalculator // Import AngleCalculator
+import com.example.bodydetectionapp.utils.AngleCalculator
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.core.BaseOptions

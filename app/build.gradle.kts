@@ -81,6 +81,8 @@ dependencies {
 
     // Coil (for image loading - keeping your specified version)
     implementation("io.coil-kt:coil-compose:2.6.0")
+    // In your dependencies { ... } block
+    implementation("androidx.compose.material:material-icons-extended-android:1.6.8") // Use the version that matches your other compose libraries
 
     // --- REMOVED DUPLICATE AND CONFLICTING DEPENDENCIES ---
     // Removed: implementation("androidx.compose.ui:ui:1.6.0") // Conflicts with BOM
