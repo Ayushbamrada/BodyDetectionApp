@@ -19,23 +19,25 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.bodydetectionapp.navigation.Screen
-import com.example.bodydetectionapp.ui.screens.RepTimestamp // Make sure this data class is accessible
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.net.URLDecoder
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.pow
 
-// Assuming RepTimestamp is defined like this somewhere:
-// data class RepTimestamp(val repCount: Int, val timestamp: Long)
+// In ExerciseReportScreen.kt and ExerciseTrackingViewModel.kt
+import com.example.bodydetectionapp.data.models.RepTimestamp // Adjust package if you put it elsewhere
 
-// A data class to hold the duration of a single rep.
+// Ensure RepTimestamp and RepDuration data classes are here or accessible
 data class RepDuration(val repCount: Int, val durationSeconds: Float)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,18 +46,17 @@ fun ExerciseReportScreen(
     navController: NavController,
     exerciseName: String,
     finalRepCount: Int,
-    repTimestampsJson: String?
+    repTimestampsJson: String?,
+    exerciseSessionStartTime: Long // NEW: Accept the actual session start time
 ) {
     // --- Data Processing ---
-    val (repDurations, totalWorkoutTimeSeconds) = remember(repTimestampsJson) {
+    val (repDurations, totalWorkoutTimeSeconds) = remember(repTimestampsJson, exerciseSessionStartTime) {
         val timestampsList: List<RepTimestamp> = if (!repTimestampsJson.isNullOrEmpty()) {
             val decodedJson = URLDecoder.decode(repTimestampsJson, "UTF-8")
             val type = object : TypeToken<List<RepTimestamp>>() {}.type
             try {
                 Gson().fromJson<List<RepTimestamp>>(decodedJson, type) ?: emptyList()
             } catch (e: Exception) {
-                // Log the error for debugging
-                // Log.e("ExerciseReportScreen", "Error parsing repTimestampsJson: ${e.message}")
                 emptyList()
             }
         } else {
@@ -66,17 +67,16 @@ fun ExerciseReportScreen(
         var totalTime: Long = 0L
 
         if (timestampsList.isNotEmpty()) {
-            val exerciseStartTime = timestampsList.first().timestamp // Assume first timestamp is effectively exercise start
+            // Use the passed exerciseSessionStartTime as the base for all calculations
+            val baseTime = exerciseSessionStartTime
 
             for (i in timestampsList.indices) {
                 val currentTimestampData = timestampsList[i]
                 val durationMillis = if (i == 0) {
-                    // For the first rep, duration is from exercise start to its completion
-                    // If your actual exercise starts AT the first rep, this is just its timestamp value
-                    // relative to a theoretical 0. Otherwise, if you have a separate start time, use that.
-                    // For now, assuming first rep's timestamp implies its duration from start.
-                    currentTimestampData.timestamp - exerciseStartTime // If exerciseStartTime is true start of session
+                    // For the very first rep, its duration is from the provided session start time
+                    currentTimestampData.timestamp - baseTime
                 } else {
+                    // For subsequent reps, duration is difference from the previous rep's completion time
                     currentTimestampData.timestamp - timestampsList[i - 1].timestamp
                 }
                 calculatedRepDurations.add(
@@ -87,13 +87,9 @@ fun ExerciseReportScreen(
                 )
             }
 
-            // Calculate total workout time: Last rep's timestamp minus the first rep's timestamp
-            if (timestampsList.size > 1) {
-                totalTime = (timestampsList.last().timestamp - timestampsList.first().timestamp) / 1000L
-            } else if (timestampsList.size == 1) {
-                // If only one rep, total time is its duration from the start
-                totalTime = (timestampsList.first().timestamp - exerciseStartTime) / 1000L
-            }
+            // Total workout time: Last rep's timestamp minus the actual exercise session start time
+            totalTime = (timestampsList.lastOrNull()?.timestamp ?: baseTime) - baseTime
+            totalTime = (totalTime / 1000L).coerceAtLeast(0L) // Ensure non-negative seconds
         }
         calculatedRepDurations to totalTime
     }
@@ -204,8 +200,7 @@ fun ExerciseReportScreen(
                     .fillMaxWidth(0.8f)
                     .height(56.dp)
                     .clip(RoundedCornerShape(28.dp)), // More rounded corners
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text("Finish Workout", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -213,8 +208,6 @@ fun ExerciseReportScreen(
     }
 }
 
-// RepDurationLineGraph remains mostly the same as the previous version,
-// but I've included it again for completeness and any minor tweaks.
 @Composable
 fun RepDurationLineGraph(repDurations: List<RepDuration>) {
     val lineColor = MaterialTheme.colorScheme.primary
@@ -223,67 +216,114 @@ fun RepDurationLineGraph(repDurations: List<RepDuration>) {
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
     val density = LocalDensity.current
 
+    // --- Generate Heartbeat Graph Points ---
+    val graphPoints = remember(repDurations) {
+        val points = mutableListOf<PointF>()
+        if (repDurations.isNotEmpty()) {
+            // Add a starting point at (0, 0) to represent the baseline before the first rep
+            points.add(PointF(0f, 0f))
+
+            repDurations.forEachIndexed { index, repData ->
+                val repNumber = repData.repCount.toFloat()
+                val duration = repData.durationSeconds
+
+                // Point for the peak of the current rep
+                points.add(PointF(repNumber, duration))
+
+                // Point to bring the line back to 0 (baseline) after the rep
+                // We use a small offset on the X-axis for visual separation between reps
+                // The X-value here could be repNumber + 0.5f to denote "after this rep"
+                points.add(PointF(repNumber + 0.5f, 0f))
+            }
+        }
+        points
+    }
+
+    val maxDuration = remember(repDurations) {
+        // Find max duration from actual repDurations, ensure it's at least 5f for graph scaling
+        repDurations.maxOfOrNull { it.durationSeconds }?.let { ceil(it * 1.2f) }?.coerceAtLeast(5f) ?: 5f
+    }
+    val minDuration = 0f // Baseline is always 0 for heartbeat graph
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp) // Overall padding for the graph area
+            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 30.dp) // Increased bottom padding for X-axis label
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Find max/min durations, ensuring minDuration doesn't go below 0
-            val maxDuration = repDurations.maxOfOrNull { it.durationSeconds }?.let { ceil(it * 1.2f) } ?: 1f // Add more buffer
-            val minDuration = repDurations.minOfOrNull { it.durationSeconds }?.let { floor(it * 0.8f).coerceAtLeast(0f) } ?: 0f
+            val durationRange = maxDuration - minDuration
+            val safeDurationRange = if (durationRange == 0f) 1f else durationRange
 
             // Adjust effective drawing area for labels
-            val yAxisLabelWidth = with(density) { 40.dp.toPx() } // Space for Y-axis labels
+            val yAxisLabelWidth = with(density) { 45.dp.toPx() } // Space for Y-axis labels
             val xAxisLabelHeight = with(density) { 30.dp.toPx() } // Space for X-axis labels
+            val valueLabelOffset = with(density) { 10.dp.toPx() } // Offset for duration value text above points
 
-            val effectiveHeight = size.height - xAxisLabelHeight
-            val effectiveWidth = size.width - yAxisLabelWidth
+            val effectiveHeight = size.height - xAxisLabelHeight // Height for graph drawing area
+            val effectiveWidth = size.width - yAxisLabelWidth // Width for graph drawing area
 
-            val yAxisDrawStart = 0f
-            val yAxisDrawEnd = effectiveHeight
-            val xAxisDrawStart = yAxisLabelWidth
-            val xAxisDrawEnd = size.width
+            val yAxisDrawStart = 0f // Top of the graph area for drawing
+            val yAxisDrawEnd = effectiveHeight // Bottom of the graph area for drawing
+            val xAxisDrawStart = yAxisLabelWidth // Left edge of graph area for drawing
+            val xAxisDrawEnd = size.width // Right edge of graph area for drawing
 
-            val repCount = repDurations.size
+            val numRepsForXAxis = repDurations.size
+            // X-axis scale: Need space for rep 0, rep 1, rep 1.5, rep 2, rep 2.5 etc.
+            // If 1 rep, points at 0, 1, 1.5
+            // If 3 reps, points at 0, 1, 1.5, 2, 2.5, 3, 3.5
+            val maxGraphX = if (numRepsForXAxis > 0) repDurations.last().repCount.toFloat() + 0.5f else 1f
+            val xAxisStep = if (maxGraphX > 0) effectiveWidth / maxGraphX else effectiveWidth // Calculate spacing for X points
 
-            // Draw Y-axis (Time) labels and grid lines
-            val numYLabels = 5 // Example: 5 labels on Y-axis
-            val yLabelRange = maxDuration - minDuration
-            val yPixelInterval = if (numYLabels > 1) effectiveHeight / (numYLabels - 1) else effectiveHeight
 
-            for (i in 0 until numYLabels) {
-                val labelValue = minDuration + (yLabelRange / (numYLabels - 1).coerceAtLeast(1)) * i
-                val y = yAxisDrawEnd - ((labelValue - minDuration) / yLabelRange) * effectiveHeight
-
-                // Y-axis grid lines
-                drawLine(
-                    color = gridColor,
-                    start = Offset(xAxisDrawStart, y),
-                    end = Offset(xAxisDrawEnd, y),
-                    strokeWidth = 1f
-                )
-                // Duration labels
-                drawContext.canvas.nativeCanvas.drawText(
-                    "%.1f".format(labelValue),
-                    xAxisDrawStart - 8.dp.toPx(), // Position to the left of Y-axis line
-                    y + (with(density) { 6.sp.toPx() / 2 }), // Adjust for vertical centering
-                    Paint().apply {
-                        color = android.graphics.Color.BLACK
-                        textAlign = Paint.Align.RIGHT
-                        textSize = with(density) { 12.sp.toPx() }
-                    }
-                )
+            // Draw Y-axis (Duration) labels and grid lines
+            val desiredNumYLabels = 5
+            val rawStep = safeDurationRange / (desiredNumYLabels - 1).coerceAtLeast(1)
+            val stepSize = if (rawStep > 0) {
+                val exponent = floor(log10(rawStep)).toInt()
+                val factor = when {
+                    rawStep / (10.0.pow(exponent)) < 2.0 -> 1.0
+                    rawStep / (10.0.pow(exponent)) < 5.0 -> 2.0
+                    else -> 5.0
+                }
+                (factor * (10.0.pow(exponent))).toFloat()
+            } else {
+                1f
             }
+
+            var currentYLabelValue = floor(minDuration / stepSize) * stepSize
+            while (currentYLabelValue <= maxDuration + stepSize / 2) {
+                val y = yAxisDrawEnd - ((currentYLabelValue - minDuration) / safeDurationRange) * effectiveHeight
+
+                if (y.isFinite() && y >= yAxisDrawStart && y <= yAxisDrawEnd + 10.dp.toPx()) {
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(xAxisDrawStart, y),
+                        end = Offset(xAxisDrawEnd, y),
+                        strokeWidth = 1f
+                    )
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "%.1f".format(currentYLabelValue),
+                        xAxisDrawStart - 8.dp.toPx(),
+                        y + (with(density) { 12.sp.toPx() / 3 }),
+                        Paint().apply {
+                            color = onSurfaceColor.toArgb() // Use Compose Color
+                            textAlign = Paint.Align.RIGHT
+                            textSize = with(density) { 12.sp.toPx() }
+                        }
+                    )
+                }
+                currentYLabelValue += stepSize
+            }
+
             // Y-axis title
             drawContext.canvas.nativeCanvas.save()
             drawContext.canvas.nativeCanvas.rotate(-90f)
             drawContext.canvas.nativeCanvas.drawText(
                 "Duration (s)",
-                -(effectiveHeight / 2 + yAxisDrawStart), // Center of the effective height
-                yAxisLabelWidth / 2 - 8.dp.toPx(), // Roughly centered in the label width area
+                -(effectiveHeight / 2 + yAxisDrawStart + 20.dp.toPx()),
+                yAxisLabelWidth / 2 - 20.dp.toPx(),
                 Paint().apply {
-                    color = android.graphics.Color.BLACK
+                    color = onSurfaceColor.toArgb() // Use Compose Color
                     textAlign = Paint.Align.CENTER
                     textSize = with(density) { 14.sp.toPx() }
                     isFakeBoldText = true
@@ -291,12 +331,12 @@ fun RepDurationLineGraph(repDurations: List<RepDuration>) {
             )
             drawContext.canvas.nativeCanvas.restore()
 
-            // Draw X-axis (Reps) labels and grid lines
-            val repLabelSpacing = if (repCount > 1) effectiveWidth / (repCount - 1).toFloat() else effectiveWidth
-            for (i in 0 until repCount) {
-                val x = xAxisDrawStart + i * repLabelSpacing
+            // Draw X-axis (Repetition) labels and grid lines
+            // We only want to label integer rep numbers (1, 2, 3...)
+            for (i in 1..numRepsForXAxis) { // Loop from 1 to total rep count
+                val x = xAxisDrawStart + (i.toFloat() * xAxisStep) // Calculate X for rep number
 
-                // X-axis grid lines
+                // Draw vertical grid line for each actual rep number
                 drawLine(
                     color = gridColor,
                     start = Offset(x, yAxisDrawEnd),
@@ -305,46 +345,44 @@ fun RepDurationLineGraph(repDurations: List<RepDuration>) {
                 )
                 // Rep number labels
                 drawContext.canvas.nativeCanvas.drawText(
-                    "${repDurations[i].repCount}",
+                    "$i",
                     x,
-                    size.height - 5.dp.toPx(), // Position below X-axis
+                    size.height - xAxisLabelHeight + (with(density) { 12.sp.toPx() * 0.7f }), // Position below X-axis line, adjusted
                     Paint().apply {
-                        color = android.graphics.Color.BLACK
+                        color = onSurfaceColor.toArgb() // Use Compose Color
                         textAlign = Paint.Align.CENTER
                         textSize = with(density) { 12.sp.toPx() }
                     }
                 )
             }
+            // X-axis title
             drawContext.canvas.nativeCanvas.drawText(
                 "Repetition",
                 xAxisDrawStart + effectiveWidth / 2, // Center of the effective width
-                size.height + 15.dp.toPx(), // X-axis title position
+                size.height - 5.dp.toPx(), // Adjusted position: further down to prevent cutoff
                 Paint().apply {
-                    color = android.graphics.Color.BLACK
+                    color = onSurfaceColor.toArgb() // Use Compose Color
                     textAlign = Paint.Align.CENTER
                     textSize = with(density) { 14.sp.toPx() }
                     isFakeBoldText = true
                 }
             )
 
-
-            // Draw the line graph
-            if (repCount > 0) {
+            // Draw the line graph and point values
+            if (graphPoints.isNotEmpty()) {
                 val path = Path()
 
-                // Calculate the first point
-                val firstRep = repDurations.first()
-                val firstX = xAxisDrawStart
-                val firstY = yAxisDrawEnd - ((firstRep.durationSeconds - minDuration) / yLabelRange) * effectiveHeight
-                path.moveTo(firstX, firstY)
+                // Move to the first point (which will be 0,0)
+                val firstPoint = graphPoints.first()
+                val startX = xAxisDrawStart + firstPoint.x * xAxisStep
+                val startY = yAxisDrawEnd - ((firstPoint.y - minDuration) / safeDurationRange) * effectiveHeight
+                path.moveTo(startX, startY)
 
                 // Draw lines to subsequent points
-                repDurations.forEachIndexed { index, repData ->
-                    if (index > 0) {
-                        val x = xAxisDrawStart + index * repLabelSpacing
-                        val y = yAxisDrawEnd - ((repData.durationSeconds - minDuration) / yLabelRange) * effectiveHeight
-                        path.lineTo(x, y)
-                    }
+                graphPoints.forEach { point ->
+                    val x = xAxisDrawStart + point.x * xAxisStep
+                    val y = yAxisDrawEnd - ((point.y - minDuration) / safeDurationRange) * effectiveHeight
+                    path.lineTo(x, y)
                 }
 
                 drawPath(
@@ -353,10 +391,12 @@ fun RepDurationLineGraph(repDurations: List<RepDuration>) {
                     style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
                 )
 
-                // Draw points on the line
-                repDurations.forEachIndexed { index, repData ->
-                    val x = xAxisDrawStart + index * repLabelSpacing
-                    val y = yAxisDrawEnd - ((repData.durationSeconds - minDuration) / yLabelRange) * effectiveHeight
+                // Draw circles and duration text only for actual rep duration points (not the 0-points)
+                repDurations.forEach { repData ->
+                    val x = xAxisDrawStart + repData.repCount.toFloat() * xAxisStep
+                    val y = yAxisDrawEnd - ((repData.durationSeconds - minDuration) / safeDurationRange) * effectiveHeight
+
+                    // Draw point
                     drawCircle(
                         color = pointColor,
                         center = Offset(x, y),
@@ -367,8 +407,26 @@ fun RepDurationLineGraph(repDurations: List<RepDuration>) {
                         center = Offset(x, y),
                         radius = 3.dp.toPx()
                     )
+
+                    // Draw duration text above the point
+                    val textToDisplay = "%.1fs".format(repData.durationSeconds)
+                    val textPaint = Paint().apply {
+                        color = onSurfaceColor.toArgb() // Use Compose Color
+                        textAlign = Paint.Align.CENTER
+                        textSize = with(density) { 12.sp.toPx() }
+                        isFakeBoldText = true
+                    }
+                    drawContext.canvas.nativeCanvas.drawText(
+                        textToDisplay,
+                        x,
+                        y - valueLabelOffset, // Position above the point
+                        textPaint
+                    )
                 }
             }
         }
     }
 }
+
+// Helper data class for graph points (can be internal to the file)
+private data class PointF(val x: Float, val y: Float)

@@ -9,6 +9,8 @@ import com.example.bodydetectionapp.data.models.Exercise
 import com.example.bodydetectionapp.data.models.ExercisePhase
 import com.example.bodydetectionapp.ml.ExerciseEvaluator
 import com.example.bodydetectionapp.ml.PoseDetectionHelper
+// In ExerciseReportScreen.kt and ExerciseTrackingViewModel.kt
+import com.example.bodydetectionapp.data.models.RepTimestamp // Adjust package if you put it elsewhere
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,9 +18,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
+import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.pow
 
 
-data class RepTimestamp(val repCount: Int, val timestamp: Long)
 
 class ExerciseTrackingViewModel : ViewModel() {
 
@@ -63,12 +67,22 @@ class ExerciseTrackingViewModel : ViewModel() {
     // NEW: A list to store the timestamp of each completed rep.
     val repTimestamps = mutableListOf<RepTimestamp>()
 
+    // **** NEW STATE: The actual start time of the exercise session ****
+    private val _exerciseStartTime = MutableStateFlow<Long?>(null)
+    val exerciseStartTime: StateFlow<Long?> = _exerciseStartTime.asStateFlow()
+
+
     init {
         // Set up evaluator callbacks
         exerciseEvaluator.onRepCompleted = { count ->
             _repCount.value = count
             // NEW: Every time a rep is completed, add a new entry to our list.
-            repTimestamps.add(RepTimestamp(count, System.currentTimeMillis()))
+            // Ensure _exerciseStartTime is set before adding the first rep
+            if (_exerciseStartTime.value != null) {
+                repTimestamps.add(RepTimestamp(count, System.currentTimeMillis()))
+            } else {
+                Log.e("ExerciseTrackingViewModel", "Rep completed but exerciseStartTime is null. Skipping timestamp record.")
+            }
         }
         exerciseEvaluator.onFeedbackUpdate = { messages ->
             _feedbackMessages.value = messages
@@ -96,9 +110,9 @@ class ExerciseTrackingViewModel : ViewModel() {
         _repCount.value = 0 // Reset rep count for new exercise
         instructionDisplayStartTime = System.currentTimeMillis() // Reset timer for new exercise
 
-        // NEW: Clear the list for a new session and add the starting point (Rep 0).
+        // **** MODIFIED: Clear the list, but DO NOT add Rep 0 here. ****
         repTimestamps.clear()
-        repTimestamps.add(RepTimestamp(0, System.currentTimeMillis()))
+        _exerciseStartTime.value = null // Reset start time for a new session
     }
 
     fun detectPose(bitmap: Bitmap) {
@@ -152,11 +166,7 @@ class ExerciseTrackingViewModel : ViewModel() {
             val tempFeedback = mutableListOf<String>()
 
             // 1. Check if current angles match any ABSOLUTE targets for the first phase
-            // This is for exercises like Sit-to-Stand where the start *must* be sitting.
-            // For Squat/Hand Raise, the first phase might not have strict absolute targets,
-            // or they might be loose (e.g., "Torso Angle" for standing straight).
             if (firstPhase.targetAngles.isNotEmpty()) {
-
                 firstPhase.targetAngles.forEach { (angleName, range) ->
                     val angleValue = currentAngles[angleName]
                     if (angleValue == null || angleValue.isNaN() || angleValue < range.min || angleValue > range.max) {
@@ -165,24 +175,19 @@ class ExerciseTrackingViewModel : ViewModel() {
                     }
                 }
             } else {
-                // If the first phase has no absolute targetAngles, assume any generally stable pose is potentially valid.
-                // This means exercises like Squat don't *require* specific hardcoded angles for their standing start,
-                // just that the user is stable.
                 isInCorrectPredefinedPose = true
             }
 
             // 2. Check for Pose Stability for the relevant angles
             var isPoseStable = true
-            // Change to mutable set
             val anglesToCheckForStability: MutableSet<String> = if (firstPhase.targetAngles.isNotEmpty()) {
-                firstPhase.targetAngles.keys.toMutableSet() // If specific absolute targets, check those for stability
+                firstPhase.targetAngles.keys.toMutableSet()
             } else {
-                // For a generic standing start (like Squat, Hand Raise), check key angles for overall body stability
                 mutableSetOf("Left Knee Angle", "Right Knee Angle", "Left Hip Angle", "Right Hip Angle", "Torso Angle", "Left Shoulder Angle", "Right Shoulder Angle")
             }
 
-            if (anglesToCheckForStability.isEmpty()) { // Fallback for exercises with no specific angle targets (e.g., simple free movement)
-                anglesToCheckForStability.addAll(currentAngles.keys) // Corrected: addAll is now possible
+            if (anglesToCheckForStability.isEmpty()) {
+                anglesToCheckForStability.addAll(currentAngles.keys)
             }
 
             if (currentAngles.isEmpty() || anglesToCheckForStability.any { !currentAngles.containsKey(it) || currentAngles[it]!!.isNaN() }) {
@@ -201,15 +206,10 @@ class ExerciseTrackingViewModel : ViewModel() {
                         if (history != null && history.size == BUFFER_SIZE) {
                             val maxDiff = history.maxOrNull()!! - history.minOrNull()!!
                             if (maxDiff > STABILITY_THRESHOLD_FOR_AUTO_START) {
-//                                Log.d("ETVModel",history.toString())
-//                                Log.d("ETVModel",maxDiff.toString())
-
                                 isPoseStable = false
                                 tempFeedback.add("Hold still. ${angleName.replace(" Angle", "")} changing by %.1f°".format(maxDiff))
                             }
                         } else {
-//                            Log.d("ETVModel","PoseStable: $isPoseStable")
-
                             isPoseStable = false // Not enough data yet to check stability
                             tempFeedback.add("Hold still to detect starting position.")
                         }
@@ -220,15 +220,10 @@ class ExerciseTrackingViewModel : ViewModel() {
                 }
             }
 
-//            Log.d("ETVModel","InitialPosecaptured: $isInCorrectPredefinedPose, isPoseStable: $isPoseStable ")
-
-
             if (isInCorrectPredefinedPose && isPoseStable) {
-
-//                Log.d("ETVModel","Initial angles captured.")
                 captureInitialAngles(currentAngles)
             } else {
-                if (tempFeedback.isEmpty()) { // Generic message if no specific angle issues, but not stable/correct
+                if (tempFeedback.isEmpty()) {
                     _feedbackMessages.value = listOf("Get into your starting position and hold still.")
                 } else {
                     _feedbackMessages.value = tempFeedback
@@ -242,7 +237,6 @@ class ExerciseTrackingViewModel : ViewModel() {
         // --- Normal Exercise Tracking (after initial pose is captured or for free movement) ---
         if (exerciseModel != null) {
             val initialAnglesSnapshot = _initialAngles.value
-            // Pass the current rep count to the evaluator for its internal logic
             val (newPhase, feedbackList) = exerciseEvaluator.evaluate(
                 currentAngles,
                 initialAnglesSnapshot
@@ -250,13 +244,11 @@ class ExerciseTrackingViewModel : ViewModel() {
             _currentPhaseInfo.value = newPhase
             _feedbackMessages.value = feedbackList
 
-            // Update angles to display on the overlay based on the current phase's targets
             _anglesToDisplay.value = getRequiredAnglesForDisplay(exerciseModel, currentAngles)
         } else {
-            // Free movement mode: just display all angles
             _anglesToDisplay.value = currentAngles
             _feedbackMessages.value = listOf("Free Movement Mode")
-            _currentPhaseInfo.value = null // No specific phase for free movement
+            _currentPhaseInfo.value = null
         }
     }
 
@@ -267,10 +259,13 @@ class ExerciseTrackingViewModel : ViewModel() {
             angleBuffer.clear() // Clear buffer once captured
             _feedbackMessages.value = listOf("Starting Position Detected! Begin exercise.")
             Log.d("ViewModel", "Initial angles captured: ${_initialAngles.value}")
-            exerciseEvaluator.currentPhaseIndex = 0 // Corrected: This line assumes currentPhaseIndex is a mutable property in ExerciseEvaluator
-            // Also notify evaluator of the new initial angles for its internal calculations
+            exerciseEvaluator.currentPhaseIndex = 0 // Reset phase index
+            // **** NEW: Set the actual exercise start time here! ****
+            _exerciseStartTime.value = System.currentTimeMillis()
+            Log.d("ViewModel", "Exercise started at: ${_exerciseStartTime.value} ms")
+
             _currentExerciseModel.value?.let {
-                // Trigger re-evaluation with captured initial angles
+                // Trigger re-evaluation with captured initial angles to set correct initial phase feedback
                 processPoseResult(_poseResult.value!!, _highlightedJoints.value, _allCalculatedAngles.value)
             }
         }

@@ -29,8 +29,8 @@ import com.example.bodydetectionapp.data.models.ExerciseDefinitions
 import com.example.bodydetectionapp.navigation.Screen
 import com.example.bodydetectionapp.ui.components.CameraPreview
 import com.example.bodydetectionapp.ui.components.PoseOverlay
-// NEW: Add the import for the Gson library
 import com.google.gson.Gson
+import java.net.URLEncoder // Ensure this import is present
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -52,6 +52,7 @@ fun ExerciseTrackingScreen(
     val currentPhaseInfo by viewModel.currentPhaseInfo.collectAsState()
     val isInitialPoseCaptured by viewModel.isInitialPoseCaptured.collectAsState()
     val anglesToDisplay by viewModel.anglesToDisplay.collectAsState()
+    val exerciseStartTime by viewModel.exerciseStartTime.collectAsState() // NEW: Observe exerciseStartTime from ViewModel
 
     var previewView: PreviewView? by remember { mutableStateOf(null) }
     var overlayView: PoseOverlay? by remember { mutableStateOf(null) }
@@ -79,18 +80,26 @@ fun ExerciseTrackingScreen(
                 actions = {
                     IconButton(
                         onClick = {
+                            // Ensure initial pose is captured OR it's free movement mode
                             if (isInitialPoseCaptured || exerciseName == "free_movement") {
-                                // --- MODIFIED: Convert the list to a JSON string before navigating ---
                                 val timestampsJson = Gson().toJson(viewModel.repTimestamps)
+
+                                // **MODIFIED**: Use the actual exerciseStartTime from the ViewModel.
+                                // If for some reason it's null (e.g., exiting free movement immediately),
+                                // use current time as a fallback, though it should ideally be set.
+                                val actualExerciseStartTime = exerciseStartTime ?: System.currentTimeMillis()
+
                                 navController.navigate(
                                     Screen.ExerciseReport.createRoute(
                                         exerciseName,
                                         repCount,
-                                        timestampsJson
+                                        timestampsJson,
+                                        actualExerciseStartTime // Pass the actual start time
                                     )
                                 )
                             } else {
                                 Log.d("ExerciseTrackingScreen", "Cannot finish yet, initial pose not captured.")
+                                // Optionally show a SnackBar or Toast to the user here.
                             }
                         },
                         modifier = Modifier.padding(4.dp)

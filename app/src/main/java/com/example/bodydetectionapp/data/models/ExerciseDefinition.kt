@@ -136,54 +136,59 @@ object ExerciseDefinitions {
     )
 
     val HAND_RAISING = Exercise(
-        name = "Hand Raising",
-        description = "Raise arms forward or to the side, maintaining straight elbows.",
-        // videoResId = R.raw.placeholder_video,
+        name = "Overhead Hand Raising", // Changed name for clarity
+        description = "Raise arms vertically overhead, maintaining straight elbows.",
+        // videoResId = R.raw.placeholder_video, // Uncomment if you have a video resource
         phases = listOf(
             ExercisePhase(
-                name = "Starting Position", // Phase 0: Arms by side, ready to start.
+                name = "Starting Position (Arms Down)", // Phase 0: Arms by side, ready to start.
                 targetAngles = mapOf(
-                    // Absolute check: Ensure arms are straight and by the user's side.
-                    "Left Elbow Angle" to AngleRange(130.0, 180.0),
-                    "Right Elbow Angle" to AngleRange(130.0, 180.0),
-                    "Left Shoulder Angle" to AngleRange(130.0, 180.0),
-                    "Right Shoulder Angle" to AngleRange(130.0, 180.0)
+                    // Absolute check: Ensure arms are straight (elbows) and by the user's side (shoulders).
+                    // Based on your feedback: Arms down = Shoulder Angle 40-70 degrees.
+                    "Left Shoulder Angle" to AngleRange(40.0, 70.0),
+                    "Right Shoulder Angle" to AngleRange(40.0, 70.0),
+                    "Left Elbow Angle" to AngleRange(140.0, 180.0), // Elbows should be straight
+                    "Right Elbow Angle" to AngleRange(140.0, 180.0)  // Elbows should be straight
                 ),
                 relativeTargetAngles = emptyList(), // No movement yet
-                feedbackMessage = "Arms by your side, ready to raise."
+                feedbackMessage = "Arms by your side, ready to raise. Keep elbows straight."
             ),
             ExercisePhase(
-                name = "Arms Up (Top)", // Phase 1: Peak of the movement.
+                name = "Arms Up (Overhead Position)", // Phase 1: Peak of the movement (arms vertically overhead).
                 targetAngles = mapOf(
-                    // Absolute check: Ensure elbows remain straight at the top.
-                    "Left Elbow Angle" to AngleRange(160.0, 180.0),
-                    "Right Elbow Angle" to AngleRange(160.0, 180.0)
+                    // Absolute check: Ensure elbows remain straight.
+                    "Left Elbow Angle" to AngleRange(150.0, 180.0),
+                    "Right Elbow Angle" to AngleRange(150.0, 180.0),
+                    // NEW Absolute check for shoulders: Arms vertically overhead = 150-180 degrees.
+                    "Left Shoulder Angle" to AngleRange(150.0, 180.0),
+                    "Right Shoulder Angle" to AngleRange(150.0, 180.0)
                 ),
                 relativeTargetAngles = listOf(
-                    // Relative check: Shoulder angle should decrease as arms are raised.
-                    // A change of -90° means arms are parallel to the floor (180° -> 90°).
-                    RelativeAngleTarget("Left Shoulder Angle", minRelativeAngle = -110.0, maxRelativeAngle = -80.0),
-                    RelativeAngleTarget("Right Shoulder Angle", minRelativeAngle = -110.0, maxRelativeAngle = -80.0)
+                    // Relative check: Shoulder angle should INCREASE from 40-70 (down) to 150-180 (overhead).
+                    // If start is 50 and end is 160, change is +110.
+                    // The range below (90 to 140) covers this expected increase.
+                    RelativeAngleTarget("Left Shoulder Angle", minRelativeAngle = 90.0, maxRelativeAngle = 140.0),
+                    RelativeAngleTarget("Right Shoulder Angle", minRelativeAngle = 90.0, maxRelativeAngle = 140.0)
                 ),
-                feedbackMessage = "Raise arms until they are parallel to the floor."
+                feedbackMessage = "Raise arms fully overhead, keeping them straight."
             ),
             ExercisePhase(
                 name = "Arms Down (Return)", // Phase 2: Return to the starting position.
                 targetAngles = mapOf(
                     // Absolute check: Ensure elbows are still straight on the way down.
-                    "Left Elbow Angle" to AngleRange(160.0, 180.0),
-                    "Right Elbow Angle" to AngleRange(160.0, 180.0)
+                    "Left Elbow Angle" to AngleRange(140.0, 180.0),
+                    "Right Elbow Angle" to AngleRange(140.0, 180.0)
                 ),
                 relativeTargetAngles = listOf(
-                    // Relative check: Shoulder angle should return to its starting value (+/- 15° tolerance).
-                    RelativeAngleTarget("Left Shoulder Angle", minRelativeAngle = -15.0, maxRelativeAngle = 15.0),
-                    RelativeAngleTarget("Right Shoulder Angle", minRelativeAngle = -15.0, maxRelativeAngle = 15.0)
+                    // Relative check: Shoulder angle should return to its initial (arms down) value.
+                    // A change close to 0 from the initial angle, with some tolerance.
+                    RelativeAngleTarget("Left Shoulder Angle", minRelativeAngle = -20.0, maxRelativeAngle = 20.0), // Allows some slight deviation from initial
+                    RelativeAngleTarget("Right Shoulder Angle", minRelativeAngle = -20.0, maxRelativeAngle = 20.0)
                 ),
-                feedbackMessage = "Lower your arms with control."
+                feedbackMessage = "Lower your arms with control back to your side."
             )
         )
     )
-
     // The list containing all defined exercises for the app to use.
     val ALL_EXERCISES = listOf(SQUAT, HAND_RAISING)
 }
