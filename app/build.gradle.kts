@@ -62,6 +62,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
     implementation("androidx.camera:camera-mlkit-vision:1.4.2")
+    implementation("com.google.code.gson:gson:2.10.1")
 
     // ML Kit Pose Detection Accurate (Keeping your specified beta version as requested)
     implementation("com.google.mlkit:pose-detection-accurate:18.0.0-beta5")

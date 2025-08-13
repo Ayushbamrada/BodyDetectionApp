@@ -109,15 +109,14 @@ object ExerciseDefinitions {
                 feedbackMessage = "Stand tall, feet shoulder-width apart. Prepare to squat."
             ),
             ExercisePhase(
-                name = "Descent (Bottom)", // Phase 1: Squatting down
-                targetAngles = emptyMap(), // Depth is relative to the user's initial stance
+                name = "Descent (Bottom)",
+                targetAngles = emptyMap(),
                 relativeTargetAngles = listOf(
-                    // Knee angles should decrease as the user bends their knees
-                    RelativeAngleTarget("Left Knee Angle", minRelativeAngle = -110.0, maxRelativeAngle = -90.0),
-                    RelativeAngleTarget("Right Knee Angle", minRelativeAngle = -110.0, maxRelativeAngle = -90.0),
-                    // Hip angles should also decrease as the user hinges at the hips
-                    RelativeAngleTarget("Left Hip Angle", minRelativeAngle = -100.0, maxRelativeAngle = -80.0),
-                    RelativeAngleTarget("Right Hip Angle", minRelativeAngle = -100.0, maxRelativeAngle = -80.0)
+                    // --- Widen the acceptable range ---
+                    RelativeAngleTarget("Left Knee Angle", minRelativeAngle = -120.0, maxRelativeAngle = -80.0),
+                    RelativeAngleTarget("Right Knee Angle", minRelativeAngle = -120.0, maxRelativeAngle = -80.0),
+                    RelativeAngleTarget("Left Hip Angle", minRelativeAngle = -110.0, maxRelativeAngle = -70.0),
+                    RelativeAngleTarget("Right Hip Angle", minRelativeAngle = -110.0, maxRelativeAngle = -70.0)
                 ),
                 feedbackMessage = "Lower hips as if sitting back into a chair. Keep your chest up."
             ),
@@ -145,10 +144,10 @@ object ExerciseDefinitions {
                 name = "Starting Position", // Phase 0: Arms by side, ready to start.
                 targetAngles = mapOf(
                     // Absolute check: Ensure arms are straight and by the user's side.
-                    "Left Elbow Angle" to AngleRange(100.0, 180.0),
-                    "Right Elbow Angle" to AngleRange(100.0, 180.0),
-                    "Left Shoulder Angle" to AngleRange(160.0, 180.0),
-                    "Right Shoulder Angle" to AngleRange(160.0, 180.0)
+                    "Left Elbow Angle" to AngleRange(130.0, 180.0),
+                    "Right Elbow Angle" to AngleRange(130.0, 180.0),
+                    "Left Shoulder Angle" to AngleRange(130.0, 180.0),
+                    "Right Shoulder Angle" to AngleRange(130.0, 180.0)
                 ),
                 relativeTargetAngles = emptyList(), // No movement yet
                 feedbackMessage = "Arms by your side, ready to raise."

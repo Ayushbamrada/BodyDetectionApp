@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.AccessibilityNew
@@ -67,8 +69,6 @@ fun ExerciseSelectionScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // FIX: Create a special, hardcoded card for "Free Movement"
-            // This ensures the correct "free_movement" ID is always passed.
             item {
                 AnimatedExerciseCard(
                     title = "Free Movement",
@@ -80,12 +80,10 @@ fun ExerciseSelectionScreen(navController: NavController) {
                 )
             }
 
-            // FIX: Loop only through the exercises from ExerciseDefinitions.
             itemsIndexed(ExerciseDefinitions.ALL_EXERCISES) { index, exercise ->
                 AnimatedExerciseCard(
                     title = exercise.name,
-                    description = exercise.description ?: "",
-                    // Add 1 to index for animation delay because "Free Movement" is at index 0
+                    description = exercise.description, // Pass the full description
                     animationDelay = (index + 1) * 100,
                     onClick = {
                         navController.navigate(Screen.ExerciseTracking.createRoute(exercise.name))
@@ -96,7 +94,6 @@ fun ExerciseSelectionScreen(navController: NavController) {
     }
 }
 
-// Overloaded the card to accept raw strings for the special "Free Movement" case
 @Composable
 fun AnimatedExerciseCard(
     title: String,
@@ -120,7 +117,7 @@ fun AnimatedExerciseCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(190.dp)
+            .height(190.dp) // The card height remains fixed
             .scale(scale)
             .alpha(alpha)
             .clickable(onClick = onClick),
@@ -130,15 +127,18 @@ fun AnimatedExerciseCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
     ) {
+        // --- MODIFIED: The Column is now scrollable ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(16.dp)
+                // 1. This modifier enables vertical scrolling.
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                imageVector = getIconForExercise(title), // Use title to get the icon
+                imageVector = getIconForExercise(title),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(40.dp)
@@ -157,7 +157,8 @@ fun AnimatedExerciseCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center,
-                maxLines = 2
+                // 2. The maxLines property is removed to allow the full text to be shown.
+                // maxLines = 2
             )
         }
     }
@@ -168,8 +169,8 @@ private fun getIconForExercise(exerciseName: String): ImageVector {
     return when (exerciseName.lowercase()) {
         "free movement" -> Icons.Default.Gesture
         "squat" -> Icons.Default.AccessibilityNew
+        "hand raising" -> Icons.Default.Boy // Changed for better representation
         "push-up" -> Icons.Default.FitnessCenter
-        "jumping jack" -> Icons.Default.Boy
         else -> Icons.Default.SportsGymnastics
     }
 }
