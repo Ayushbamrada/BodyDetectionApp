@@ -1,363 +1,191 @@
-//package com.example.bodydetectionapp.ml
-//
-//import com.example.bodydetectionapp.data.models.Exercise
-//import com.example.bodydetectionapp.data.models.ExerciseDefinitions
-//import com.example.bodydetectionapp.data.models.ExercisePhase // Import ExercisePhase
-//import android.util.Log // Added for logging
-//import com.example.bodydetectionapp.data.models.AngleRange
-//
-//class ExerciseEvaluator {
-//
-//    // Current exercise being evaluated
-//    var currentExercise: Exercise? = null
-//        private set
-//
-//    // Current phase index within the active exercise
-//    var currentPhaseIndex: Int = 0
-//        private set
-//
-//    // Repetition counter
-//    var repCount: Int = 0
-//        private set
-//
-//    // State to manage transitions:
-//    // This could be 'IDLE', 'IN_PHASE', 'TRANSITIONING', 'COMPLETED'
-//    // For rep counting, we need to know if we've reached the "bottom" of a rep
-//    private var isRepInProgress: Boolean = false // True if user is between start and end of a rep
-//    private var isAtRepPeak: Boolean = false     // True if user reached the deepest/highest point of a rep
-//
-//    // Callback for when a rep is completed (optional, for UI updates)
-//    var onRepCompleted: ((Int) -> Unit)? = null
-//    var onFeedbackUpdate: ((List<String>) -> Unit)? = null // New callback for external feedback updates
-//    var onPhaseChanged: ((ExercisePhase) -> Unit)? = null // New callback for phase changes
-//
-//    /**
-//     * Sets the exercise to be evaluated and resets the state.
-//     */
-//    fun setExercise(exercise: Exercise?) { // Made nullable to support "free_movement"
-//        currentExercise = exercise
-//        currentPhaseIndex = 0
-//        repCount = 0
-//        isRepInProgress = false
-//        isAtRepPeak = false
-//        // Immediately provide initial feedback for the first phase if exercise is not null
-//        currentExercise?.phases?.firstOrNull()?.let {
-//            onPhaseChanged?.invoke(it) // Notify initial phase
-//            onFeedbackUpdate?.invoke(listOf(it.feedbackMessage ?: "Ready to start."))
-//        } ?: run {
-//            onFeedbackUpdate?.invoke(listOf("Free Movement Mode")) // For free movement
-//        }
-//    }
-//
-//    /**
-//     * Evaluates the current pose against the active exercise's current phase.
-//     * Manages phase transitions and rep counting.
-//     *
-//     * @param currentAngles The map of calculated joint angles for the current frame.
-//     * @return A list of feedback messages for the current frame.
-//     */
-//    fun evaluate(currentAngles: Map<String, Double>): List<String> {
-//        val feedback = mutableListOf<String>()
-//        val exercise = currentExercise
-//        if (exercise == null) {
-//            // No specific exercise selected (e.g., "free_movement")
-//            return listOf("Free Movement: No exercise guidance.")
-//        }
-//
-//        val currentPhase = exercise.phases.getOrNull(currentPhaseIndex)
-//
-//        if (currentPhase == null) {
-//            return listOf("Exercise definition error: No phases found.")
-//        }
-//
-//        var allAnglesMetInCurrentPhase = true
-//        currentPhase.targetAngles.entries.forEach { (angleName, targetRange) -> // Use .entries for clarity
-//            val actualAngle = currentAngles[angleName]
-//
-//            if (actualAngle != null && actualAngle.isFinite()) {
-//                if (actualAngle < targetRange.min) {
-//                    feedback.add("$angleName: Too low! (Target: ${targetRange.min.toInt()}-${targetRange.max.toInt()}°, Current: %.1f°)".format(actualAngle))
-//                    allAnglesMetInCurrentPhase = false
-//                } else if (actualAngle > targetRange.max) {
-//                    feedback.add("$angleName: Too high! (Target: ${targetRange.min.toInt()}-${targetRange.max.toInt()}°, Current: %.1f°)".format(actualAngle))
-//                    allAnglesMetInCurrentPhase = false
-//                }
-//            } else {
-//                allAnglesMetInCurrentPhase = false // Missing angle means phase condition not met
-//            }
-//        }
-//
-//        // Add general phase feedback if specific angle issues are not present
-//        if (allAnglesMetInCurrentPhase && feedback.isEmpty()) {
-//            currentPhase.feedbackMessage?.let { feedback.add(it) }
-//        } else if (!allAnglesMetInCurrentPhase && currentPhase.feedbackMessage != null) {
-//            // If angles are not met, still give general phase feedback if there are specific angle errors too.
-//            // Or prioritize specific errors by not adding general feedback. Depends on UX.
-//            // For now, let's keep it simple: if specific errors, show them, otherwise show general phase message.
-//        }
-//
-//
-//        // --- Repetition Counting and Phase Transition Logic ---
-//        when (exercise.name) {
-//            ExerciseDefinitions.SQUAT.name -> {
-//                // Phase 0: Starting Position (Top)
-//                // Phase 1: Lowering Phase
-//                // Phase 2: Bottom Position
-//                // Phase 3: Ascending Phase
-//
-//                // Transition to next phase if current phase's angles are met
-//                if (allAnglesMetInCurrentPhase) {
-//                    when (currentPhaseIndex) {
-//                        0 -> { // From Starting Position
-//                            if (!isRepInProgress) { // Start a new rep cycle
-//                                currentPhaseIndex = 1 // Move to Lowering
-//                                isRepInProgress = true
-//                                onPhaseChanged?.invoke(exercise.phases[currentPhaseIndex])
-//                                feedback.add("Start lowering for squat.")
-//                            }
-//                        }
-//                        1 -> { // From Lowering Phase
-//                            // Transition to Bottom if met
-//                            if (exercise.phases.getOrNull(2)?.let { phase ->
-//                                    isAnglesMet(currentAngles, phase.targetAngles)
-//                                } == true) {
-//                                currentPhaseIndex = 2
-//                                onPhaseChanged?.invoke(exercise.phases[currentPhaseIndex])
-//                                feedback.add("Reached bottom position.")
-//                                isAtRepPeak = true // Mark that the deepest point was reached
-//                            }
-//                        }
-//                        2 -> { // From Bottom Position
-//                            // If conditions for Ascending are met, move to Ascending
-//                            if (isAtRepPeak && exercise.phases.getOrNull(3)?.let { phase ->
-//                                    isAnglesMet(currentAngles, phase.targetAngles)
-//                                } == true) {
-//                                currentPhaseIndex = 3
-//                                onPhaseChanged?.invoke(exercise.phases[currentPhaseIndex])
-//                                feedback.add("Begin ascending.")
-//                            }
-//                        }
-//                        3 -> { // From Ascending Phase
-//                            // If conditions for Starting Position are met, and we were in a rep, count rep
-//                            if (isRepInProgress && isAtRepPeak && exercise.phases.getOrNull(0)?.let { phase ->
-//                                    isAnglesMet(currentAngles, phase.targetAngles)
-//                                } == true) {
-//                                repCount++
-//                                isRepInProgress = false
-//                                isAtRepPeak = false
-//                                currentPhaseIndex = 0 // Reset to starting position for next rep
-//                                feedback.add("Rep $repCount completed!")
-//                                onRepCompleted?.invoke(repCount)
-//                                onPhaseChanged?.invoke(exercise.phases[currentPhaseIndex])
-//                                feedback.add("Ready for next squat.")
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//            ExerciseDefinitions.HAND_RAISING.name -> {
-//                // Phase 0: Arms Down
-//                // Phase 1: Arms Up
-//
-//                if (allAnglesMetInCurrentPhase) {
-//                    when (currentPhaseIndex) {
-//                        0 -> { // From Arms Down
-//                            if (!isRepInProgress) {
-//                                currentPhaseIndex = 1 // Move to Arms Up
-//                                isRepInProgress = true
-//                                onPhaseChanged?.invoke(exercise.phases[currentPhaseIndex])
-//                                feedback.add("Start raising arms.")
-//                            }
-//                        }
-//                        1 -> { // From Arms Up
-//                            if (isRepInProgress && exercise.phases.getOrNull(0)?.let { phase ->
-//                                    isAnglesMet(currentAngles, phase.targetAngles)
-//                                } == true) {
-//                                repCount++
-//                                isRepInProgress = false
-//                                currentPhaseIndex = 0 // Reset to Arms Down for next rep
-//                                feedback.add("Rep $repCount completed!")
-//                                onRepCompleted?.invoke(repCount)
-//                                onPhaseChanged?.invoke(exercise.phases[currentPhaseIndex])
-//                                feedback.add("Arms down, ready for next raise.")
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//            // Add other exercises here
-//        }
-//
-//        // Notify listeners of updated feedback (if there are new messages or state changes)
-//        // Only invoke if feedback is not empty OR if phase has changed to ensure UI updates
-//        if (feedback.isNotEmpty() || (currentPhase != exercise.phases.getOrNull(currentPhaseIndex))) {
-//            onFeedbackUpdate?.invoke(feedback)
-//        }
-//
-//        return feedback // Also return for immediate use in ViewModel
-//    }
-//
-//    // Helper function to check if a set of angles meets a target
-//    private fun isAnglesMet(currentAngles: Map<String, Double>, targetAngles: Map<String, AngleRange>): Boolean {
-//        return targetAngles.entries.all { (angleName, targetRange) ->
-//            val actualAngle = currentAngles[angleName]
-//            actualAngle != null && actualAngle.isFinite() &&
-//                    actualAngle >= targetRange.min && actualAngle <= targetRange.max
-//        }
-//    }
-//
-//
-//    /**
-//     * Returns the current state of the evaluator for display.
-//     */
-//    fun getEvaluationSummary(): String {
-//        val phaseName = currentExercise?.phases?.getOrNull(currentPhaseIndex)?.name ?: "N/A"
-//        return "Exercise: ${currentExercise?.name ?: "None"}\n" +
-//                "Phase: $phaseName\n" +
-//                "Reps: $repCount"
-//    }
-//
-//    // Call this if you need to reset the exercise without changing the type
-//    fun resetCurrentExercise() {
-//        setExercise(currentExercise) // Re-sets with existing exercise, triggering reset logic
-//    }
-//}
 package com.example.bodydetectionapp.ml
 
+import android.os.CountDownTimer
 import android.util.Log
 import com.example.bodydetectionapp.data.models.Exercise
-import com.example.bodydetectionapp.data.models.ExercisePhase
+import com.example.bodydetectionapp.data.models.Landmark
+import com.example.bodydetectionapp.data.models.RepetitionState
 
 /**
- * A state machine that evaluates a user's pose against a defined exercise,
- * tracks phase progression, and counts repetitions.
+ * An enum to manage the overall state of the exercise session.
+ */
+enum class ExerciseState {
+    NOT_STARTED,      // No exercise is active, waiting for user to get in frame.
+    WAITING_TO_START, // User is visible, waiting for the "hands up" start gesture.
+    COUNTDOWN,        // The 3-2-1 countdown is in progress.
+    IN_PROGRESS,      // The exercise is actively being tracked.
+    FINISHED          // The session is over.
+}
+
+/**
+ * A new, intelligent evaluator that uses gesture detection to start and
+ * cyclical motion tracking to count repetitions.
  */
 class ExerciseEvaluator {
 
+    // MARK: - Public State
     var currentExercise: Exercise? = null
         private set
-
-    var currentPhaseIndex: Int = 0
-    // This can be set by the ViewModel for resets.
-    // A stricter approach would use a public method like `resetPhase()`.
 
     var repCount: Int = 0
         private set
 
-    // Callbacks to communicate with the ViewModel
+    var exerciseState: ExerciseState = ExerciseState.NOT_STARTED
+        private set
+
+    // MARK: - Callbacks
     var onRepCompleted: ((Int) -> Unit)? = null
-    var onFeedbackUpdate: ((List<String>) -> Unit)? = null
-    var onPhaseChanged: ((ExercisePhase) -> Unit)? = null
+    var onFeedbackUpdate: ((String) -> Unit)? = null
+    var onStateChanged: ((ExerciseState) -> Unit)? = null // For UI to react to state changes
+    var onCountdownTick: ((Int) -> Unit)? = null // For the countdown UI
+
+    // MARK: - Private State
+    private var repState: RepetitionState = RepetitionState.IDLE
+    private var startGestureTimer: CountDownTimer? = null
+    private val START_GESTURE_DURATION_MS = 1500L // Hold hands up for 1.5 seconds
 
     /**
-     * Sets the exercise and resets the state.
+     * Sets the exercise and resets the entire state machine.
      */
-    fun setExercise(exercise: Exercise?) {
+    fun setExercise(exercise: Exercise) {
         currentExercise = exercise
         reset()
-        // Provide initial state to the UI
-        currentExercise?.phases?.firstOrNull()?.let {
-            onPhaseChanged?.invoke(it)
-            onFeedbackUpdate?.invoke(listOf(it.feedbackMessage ?: "Ready to start."))
-        } ?: onFeedbackUpdate?.invoke(listOf("Free Movement Mode"))
+        Log.d("ExerciseEvaluator", "Exercise set to: ${exercise.name}. Waiting for user.")
     }
 
     /**
-     * Resets the evaluator's state for the current exercise.
-     */
-    fun reset() {
-        currentPhaseIndex = 0
-        repCount = 0
-        onRepCompleted?.invoke(repCount) // Notify UI of reset rep count
-    }
-
-    /**
-     * Evaluates the current pose, manages phase transitions, and counts reps.
-     * This is the core logic engine of the evaluator.
+     * The main evaluation function, called for every frame from the camera.
      *
-     * @param currentAngles The map of calculated joint angles for the current frame.
-     * @param initialAngles The map of initial joint angles captured at the start.
-     * @return A Pair containing the current ExercisePhase and a list of feedback messages.
+     * @param landmarks A map of landmark names to their 3D coordinates.
+     * @param angles A map of calculated joint angles for the current frame.
      */
-    fun evaluate(
-        currentAngles: Map<String, Double>,
-        initialAngles: Map<String, Double>
-    ): Pair<ExercisePhase, List<String>> {
-        val exercise = currentExercise ?: return Pair(ExercisePhase("N/A"), listOf("No exercise selected."))
-        val currentPhase = exercise.phases.getOrNull(currentPhaseIndex) ?: return Pair(ExercisePhase("Error"), listOf("Invalid phase."))
-
-        val feedback = mutableListOf<String>()
-        val allConditionsMet = isPhaseMet(currentPhase, currentAngles, initialAngles, feedback)
-
-        if (allConditionsMet) {
-            // Conditions for the current phase are met, so we advance to the next phase.
-            val nextPhaseIndex = (currentPhaseIndex + 1) % exercise.phases.size
-            currentPhaseIndex = nextPhaseIndex
-            val newPhase = exercise.phases[currentPhaseIndex]
-
-            // A rep is completed when we successfully loop back to the first phase (index 0).
-            if (currentPhaseIndex == 0) {
-                repCount++
-                Log.d("ExerciseEvaluator", "Repetition $repCount completed for ${exercise.name}.")
-                onRepCompleted?.invoke(repCount)
-                feedback.add(0, "Rep $repCount Complete!")
-            } else {
-                Log.d("ExerciseEvaluator", "Advanced to phase: ${newPhase.name}")
+    fun evaluate(landmarks: Map<String, Landmark>?, angles: Map<String, Double>?) {
+        // If landmarks or angles are null, the user is not fully visible.
+        // We handle this inside the state machine now.
+        when (exerciseState) {
+            ExerciseState.NOT_STARTED -> {
+                // Once the user is visible (landmarks are not null), we can move to the next state.
+                landmarks?.let {
+                    updateState(ExerciseState.WAITING_TO_START)
+                    onFeedbackUpdate?.invoke("Raise both hands to start")
+                }
             }
-            onPhaseChanged?.invoke(newPhase)
-        }
-
-        // If feedback is empty after checks, add the default message for the current phase.
-        if (feedback.isEmpty()) {
-            feedback.add(currentPhase.feedbackMessage ?: "Continue the movement.")
-        }
-
-        onFeedbackUpdate?.invoke(feedback)
-        return Pair(currentPhase, feedback)
-    }
-
-    /**
-     * Checks if the user's current pose meets all criteria for a given phase.
-     *
-     * @param phase The phase to check against.
-     * @param currentAngles The user's current joint angles.
-     * @param initialAngles The user's starting joint angles (for relative checks).
-     * @param feedback A mutable list to add specific error messages to.
-     * @return True if all conditions of the phase are met, false otherwise.
-     */
-    private fun isPhaseMet(
-        phase: ExercisePhase,
-        currentAngles: Map<String, Double>,
-        initialAngles: Map<String, Double>,
-        feedback: MutableList<String>
-    ): Boolean {
-        var allConditionsMet = true
-
-        // 1. Check Absolute Angle Targets
-        phase.targetAngles.forEach { (angleName, targetRange) ->
-            val actualAngle = currentAngles[angleName]
-            if (actualAngle == null || actualAngle.isNaN() || actualAngle !in targetRange.min..targetRange.max) {
-                allConditionsMet = false
-                feedback.add("Adjust $angleName! Current: %.0f°, Target: %.0f-%.0f°".format(actualAngle ?: Double.NaN, targetRange.min, targetRange.max))
+            ExerciseState.WAITING_TO_START -> {
+                // Use a safe call. Only check for gesture if landmarks are available.
+                landmarks?.let {
+                    checkForStartGesture(it)
+                } ?: cancelStartGestureTimer() // If user disappears, cancel the timer.
+            }
+            ExerciseState.IN_PROGRESS -> {
+                // Use a safe call. Only track reps if angles are available.
+                angles?.let {
+                    trackRepetition(it)
+                }
+            }
+            ExerciseState.COUNTDOWN, ExerciseState.FINISHED -> {
+                // No action needed in these states, they are managed by timers/events.
             }
         }
+    }
 
-        // 2. Check Relative Angle Targets
-        phase.relativeTargetAngles.forEach { relativeTarget ->
-            val initial = initialAngles[relativeTarget.angleName]
-            val current = currentAngles[relativeTarget.angleName]
+    /**
+     * Checks if the user is performing the "hands up" gesture.
+     */
+    private fun checkForStartGesture(landmarks: Map<String, Landmark>) {
+        val leftWrist = landmarks["LEFT_WRIST"]
+        val rightWrist = landmarks["RIGHT_WRIST"]
+        val leftShoulder = landmarks["LEFT_SHOULDER"]
+        val rightShoulder = landmarks["RIGHT_SHOULDER"]
 
-            if (initial != null && current != null && current.isFinite()) {
-                val difference = current - initial
-                if (difference < relativeTarget.minRelativeAngle || difference > relativeTarget.maxRelativeAngle) {
-                    allConditionsMet = false
-                    feedback.add("${relativeTarget.angleName} incorrect. Change: %.0f°, Target: %.0f-%.0f°".format(difference, relativeTarget.minRelativeAngle, relativeTarget.maxRelativeAngle))
+        if (leftWrist != null && rightWrist != null && leftShoulder != null && rightShoulder != null) {
+            val handsAreUp = leftWrist.y < leftShoulder.y && rightWrist.y < rightShoulder.y
+            if (handsAreUp) {
+                if (startGestureTimer == null) {
+                    onFeedbackUpdate?.invoke("Hold it...")
+                    startGestureTimer = object : CountDownTimer(START_GESTURE_DURATION_MS, 1000) {
+                        override fun onTick(millisUntilFinished: Long) {}
+                        override fun onFinish() {
+                            startExerciseCountdown()
+                            startGestureTimer = null
+                        }
+                    }.start()
                 }
             } else {
-                allConditionsMet = false // Cannot check relative angle if data is missing.
-                feedback.add("Cannot track ${relativeTarget.angleName}.")
+                cancelStartGestureTimer()
             }
         }
-        return allConditionsMet
+    }
+
+    /**
+     * Tracks the cyclical motion of an exercise to count reps.
+     */
+    private fun trackRepetition(angles: Map<String, Double>) {
+        val exercise = currentExercise ?: return
+        val repCounter = exercise.repCounter
+
+        val relevantAngles = repCounter.keyJointsToTrack.mapNotNull { angles[it] }
+        if (relevantAngles.isEmpty()) return
+        val currentAngle = relevantAngles.average()
+
+        val isBendingMovement = repCounter.entryThreshold < repCounter.exitThreshold
+
+        when (repState) {
+            RepetitionState.IDLE -> {
+                onFeedbackUpdate?.invoke("Begin ${exercise.name}")
+                if ((isBendingMovement && currentAngle < repCounter.entryThreshold) ||
+                    (!isBendingMovement && currentAngle > repCounter.entryThreshold)) {
+                    repState = RepetitionState.IN_PROGRESS
+                }
+            }
+            RepetitionState.IN_PROGRESS -> {
+                onFeedbackUpdate?.invoke("Finish the movement")
+                if ((isBendingMovement && currentAngle > repCounter.exitThreshold) ||
+                    (!isBendingMovement && currentAngle < repCounter.exitThreshold)) {
+                    repCount++
+                    onRepCompleted?.invoke(repCount)
+                    repState = RepetitionState.IDLE
+                }
+            }
+        }
+    }
+
+    private fun startExerciseCountdown() {
+        updateState(ExerciseState.COUNTDOWN)
+        object : CountDownTimer(3500, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                val second = (millisUntilFinished / 1000).toInt()
+                if (second > 0) onCountdownTick?.invoke(second)
+            }
+            override fun onFinish() {
+                updateState(ExerciseState.IN_PROGRESS)
+            }
+        }.start()
+    }
+
+    private fun updateState(newState: ExerciseState) {
+        if (exerciseState != newState) {
+            exerciseState = newState
+            onStateChanged?.invoke(newState)
+            Log.d("ExerciseEvaluator", "State changed to: $newState")
+        }
+    }
+
+    private fun cancelStartGestureTimer() {
+        if (startGestureTimer != null) {
+            startGestureTimer?.cancel()
+            startGestureTimer = null
+            onFeedbackUpdate?.invoke("Raise both hands to start")
+        }
+    }
+
+    /**
+     * Resets the evaluator to its initial state.
+     */
+    fun reset() {
+        cancelStartGestureTimer()
+        repCount = 0
+        repState = RepetitionState.IDLE
+        updateState(ExerciseState.NOT_STARTED)
+        onRepCompleted?.invoke(repCount)
     }
 }

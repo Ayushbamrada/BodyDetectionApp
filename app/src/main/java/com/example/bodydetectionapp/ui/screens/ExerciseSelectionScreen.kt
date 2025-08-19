@@ -171,6 +171,8 @@ private fun getIconForExercise(exerciseName: String): ImageVector {
         "squat" -> Icons.Default.AccessibilityNew
         "hand raising" -> Icons.Default.Boy // Changed for better representation
         "push-up" -> Icons.Default.FitnessCenter
+        "sit to stand" -> Icons.Default.Chair
+        "marching in place" -> Icons.Default.RunCircle
         else -> Icons.Default.SportsGymnastics
     }
 }

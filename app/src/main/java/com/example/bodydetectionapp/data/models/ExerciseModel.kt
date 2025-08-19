@@ -33,52 +33,50 @@
 package com.example.bodydetectionapp.data.models
 
 /**
- * Represents a range for an angle, with a minimum and maximum value.
+ * A simple data class to hold 3D landmark coordinates.
+ * This will be needed by the evaluator for gesture detection.
+ * MediaPipe provides these coordinates.
  */
-data class AngleRange(val min: Double, val max: Double)
+data class Landmark(val x: Float, val y: Float, val z: Float)
 
 /**
- * Defines a target for an angle based on its change relative to an initial angle.
- * This is used for tracking movements where the start position is dynamic.
- *
- * @param angleName The name of the angle (e.g., "Left Knee Angle").
- * @param minRelativeAngle The minimum acceptable change (in degrees) from the initial angle.
- * Can be negative for a decrease (e.g., bending).
- * @param maxRelativeAngle The maximum acceptable change (in degrees) from the initial angle.
+ * An enum to represent the state of a repetition counter.
+ * It tracks whether the user is in the starting position, performing the
+ * primary movement (e.g., going down in a squat), or returning.
  */
-data class RelativeAngleTarget(
-    val angleName: String,
-    val minRelativeAngle: Double,
-    val maxRelativeAngle: Double
+enum class RepetitionState {
+    IDLE,       // Neutral state, ready for a rep
+    IN_PROGRESS // User is in the middle of a rep (e.g., down in a squat)
+}
+
+/**
+ * Defines the core mechanics of an exercise for the cyclical rep counter.
+ *
+ * @param keyJointsToTrack A list of joint angle names (e.g., "Left Knee Angle") to monitor.
+ * The evaluator will average them or use the most prominent one.
+ * @param entryThreshold The angle threshold (in degrees) to start a repetition.
+ * For a squat, this is the angle you must go *below* to start the rep.
+ * @param exitThreshold The angle threshold (in degrees) to complete a repetition.
+ * For a squat, this is the angle you must go *above* to finish the rep.
+ */
+data class RepCounter(
+    val keyJointsToTrack: List<String>,
+    val entryThreshold: Double,
+    val exitThreshold: Double
 )
 
 /**
- * Defines a specific phase within an exercise (e.g., "Starting Position", "Bottom of Squat").
- *
- * @param name The name of the phase.
- * @param targetAngles A map of angle names (e.g., "Left Knee Angle") to their **absolute** target AngleRange.
- * Used for fixed positions (e.g., "Torso straight", or to *guide* initial position).
- * @param relativeTargetAngles A list of [RelativeAngleTarget]s, defining required *changes* from the
- * user's dynamically captured initial angles. Used for actual movement tracking.
- * @param feedbackMessage An optional message to display when the user is in this phase.
- */
-data class ExercisePhase(
-    val name: String,
-    val targetAngles: Map<String, AngleRange> = emptyMap(), // Default to emptyMap for phases that primarily use relative targets
-    val relativeTargetAngles: List<RelativeAngleTarget> = emptyList(), // New field
-    val feedbackMessage: String? = null
-)
-
-/**
- * Represents a complete exercise with its name, description, and sequence of phases.
+ * Represents a complete exercise with its name, description, and the new RepCounter logic.
  *
  * @param name The name of the exercise.
  * @param description A brief description of the exercise.
- * @param phases The ordered list of ExercisePhase objects that define the exercise.
+ * @param repCounter The RepCounter object that defines how to count reps for this exercise.
+ * @param videoResId Optional: For linking to a demo video.
  */
 data class Exercise(
     val name: String,
     val description: String,
-    val phases: List<ExercisePhase>,
-    val videoResId: Int? = null // Optional: For linking to a demo video
+    val repCounter: RepCounter,
+    val metValue: Double, // NEW: Added for calorie calculation
+    val videoResId: Int? = null
 )

@@ -6,9 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PointF
 import android.view.View
-import com.example.bodydetectionapp.data.models.ExercisePhase
 import com.example.bodydetectionapp.utils.AngleCalculator.LandmarkIndices
-import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 
 class PoseOverlay(context: Context) : View(context) {
@@ -19,26 +17,7 @@ class PoseOverlay(context: Context) : View(context) {
             invalidate() // Request a redraw when data changes
         }
 
-    var highlightedJointIndices: Set<Int> = emptySet()
-        set(value) {
-            field = value
-            invalidate()
-        }
-
-    // Now directly receives the filtered angles from ViewModel
     var anglesToDisplay: Map<String, Double> = emptyMap()
-        set(value) {
-            field = value
-            invalidate()
-        }
-
-    var currentPhaseInfo: ExercisePhase? = null
-        set(value) {
-            field = value
-            invalidate()
-        }
-
-    var feedbackMessages: List<String> = emptyList()
         set(value) {
             field = value
             invalidate()
@@ -51,13 +30,6 @@ class PoseOverlay(context: Context) : View(context) {
         isAntiAlias = true
     }
 
-    private val highlightPaint = Paint().apply {
-        color = Color.RED
-        strokeWidth = 12f
-        style = Paint.Style.FILL
-        isAntiAlias = true
-    }
-
     private val linePaint = Paint().apply {
         color = Color.WHITE
         strokeWidth = 6f
@@ -65,34 +37,7 @@ class PoseOverlay(context: Context) : View(context) {
         isAntiAlias = true
     }
 
-    private val angleTextGoodPaint = Paint().apply {
-        color = Color.GREEN
-        textSize = 40f
-        textAlign = Paint.Align.CENTER
-        isFakeBoldText = true
-        style = Paint.Style.FILL
-        isAntiAlias = true
-        setShadowLayer(3f, 1f, 1f, Color.BLACK)
-    }
-    private val angleTextWarningPaint = Paint().apply {
-        color = Color.YELLOW
-        textSize = 40f
-        textAlign = Paint.Align.CENTER
-        isFakeBoldText = true
-        style = Paint.Style.FILL
-        isAntiAlias = true
-        setShadowLayer(3f, 1f, 1f, Color.BLACK)
-    }
-    private val angleTextBadPaint = Paint().apply {
-        color = Color.RED
-        textSize = 40f
-        textAlign = Paint.Align.CENTER
-        isFakeBoldText = true
-        style = Paint.Style.FILL
-        isAntiAlias = true
-        setShadowLayer(3f, 1f, 1f, Color.BLACK)
-    }
-    private val angleTextDefaultPaint = Paint().apply {
+    private val angleTextPaint = Paint().apply {
         color = Color.WHITE
         textSize = 40f
         textAlign = Paint.Align.CENTER
@@ -102,20 +47,9 @@ class PoseOverlay(context: Context) : View(context) {
         setShadowLayer(3f, 1f, 1f, Color.BLACK)
     }
 
-    // Updated feedback text paint for better visibility
-    private val feedbackTextPaint = Paint().apply {
-        color = Color.CYAN
-        textSize = 36f // Slightly larger
-        textAlign = Paint.Align.CENTER
-        isFakeBoldText = true
-        style = Paint.Style.FILL
-        isAntiAlias = true
-        setShadowLayer(5f, 2f, 2f, Color.BLACK) // Stronger shadow
-    }
-
-    private fun drawPoint(canvas: Canvas, point: PointF, landmarkIndex: Int) {
-        val currentPaint = if (highlightedJointIndices.contains(landmarkIndex)) highlightPaint else pointPaint
-        canvas.drawCircle(point.x, point.y, 15f, currentPaint)
+    private fun drawPoint(canvas: Canvas, point: PointF) {
+        // Reduced the point size slightly for a cleaner look with more points
+        canvas.drawCircle(point.x, point.y, 12f, pointPaint)
     }
 
     private fun drawLine(canvas: Canvas, startPoint: PointF, endPoint: PointF) {
@@ -133,19 +67,9 @@ class PoseOverlay(context: Context) : View(context) {
                 PointF(landmark.x() * viewWidth, landmark.y() * viewHeight)
             }
 
-            // Draw connections between landmarks
+            // --- NEW: Expanded list of all connections for a full skeleton ---
             val connections = listOf(
-                Pair(11, 13), Pair(13, 15), Pair(15, 17), Pair(15, 19), Pair(15, 21), // Left Arm
-                Pair(12, 14), Pair(14, 16), Pair(16, 18), Pair(16, 20), Pair(16, 22), // Right Arm
-                Pair(11, 12), // Shoulders
-                Pair(23, 24), // Hips
-                Pair(11, 23), Pair(12, 24), // Torso
-                Pair(23, 25), Pair(25, 27), Pair(27, 29), Pair(29, 31), // Left Leg
-                Pair(24, 26), Pair(26, 28), Pair(28, 30), Pair(30, 32),  // Right Leg
-                Pair(27, 31), Pair(28, 32) // Feet
-            )
-
-            val headConnections = listOf(
+                // Face
                 Pair(LandmarkIndices.NOSE, LandmarkIndices.LEFT_EYE_INNER),
                 Pair(LandmarkIndices.LEFT_EYE_INNER, LandmarkIndices.LEFT_EYE),
                 Pair(LandmarkIndices.LEFT_EYE, LandmarkIndices.LEFT_EYE_OUTER),
@@ -154,33 +78,69 @@ class PoseOverlay(context: Context) : View(context) {
                 Pair(LandmarkIndices.RIGHT_EYE_INNER, LandmarkIndices.RIGHT_EYE),
                 Pair(LandmarkIndices.RIGHT_EYE, LandmarkIndices.RIGHT_EYE_OUTER),
                 Pair(LandmarkIndices.RIGHT_EYE_OUTER, LandmarkIndices.RIGHT_EAR),
-                Pair(LandmarkIndices.LEFT_EAR, LandmarkIndices.RIGHT_EAR), // Connect ears
-                Pair(LandmarkIndices.MOUTH_LEFT, LandmarkIndices.MOUTH_RIGHT) // Mouth
+                Pair(LandmarkIndices.MOUTH_LEFT, LandmarkIndices.MOUTH_RIGHT),
+
+                // Body
+                Pair(LandmarkIndices.LEFT_SHOULDER, LandmarkIndices.RIGHT_SHOULDER),
+                Pair(LandmarkIndices.LEFT_HIP, LandmarkIndices.RIGHT_HIP),
+                Pair(LandmarkIndices.LEFT_SHOULDER, LandmarkIndices.LEFT_HIP),
+                Pair(LandmarkIndices.RIGHT_SHOULDER, LandmarkIndices.RIGHT_HIP),
+
+                // Arms
+                Pair(LandmarkIndices.LEFT_SHOULDER, LandmarkIndices.LEFT_ELBOW),
+                Pair(LandmarkIndices.LEFT_ELBOW, LandmarkIndices.LEFT_WRIST),
+                Pair(LandmarkIndices.RIGHT_SHOULDER, LandmarkIndices.RIGHT_ELBOW),
+                Pair(LandmarkIndices.RIGHT_ELBOW, LandmarkIndices.RIGHT_WRIST),
+
+                // Hands (simplified)
+                Pair(LandmarkIndices.LEFT_WRIST, LandmarkIndices.LEFT_THUMB_CMC),
+                Pair(LandmarkIndices.LEFT_WRIST, LandmarkIndices.LEFT_INDEX_MCP),
+                Pair(LandmarkIndices.LEFT_WRIST, LandmarkIndices.LEFT_PINKY_MCP),
+                Pair(LandmarkIndices.RIGHT_WRIST, LandmarkIndices.RIGHT_THUMB_CMC),
+                Pair(LandmarkIndices.RIGHT_WRIST, LandmarkIndices.RIGHT_INDEX_MCP),
+                Pair(LandmarkIndices.RIGHT_WRIST, LandmarkIndices.RIGHT_PINKY_MCP),
+
+
+                // Legs
+                Pair(LandmarkIndices.LEFT_HIP, LandmarkIndices.LEFT_KNEE),
+                Pair(LandmarkIndices.LEFT_KNEE, LandmarkIndices.LEFT_ANKLE),
+                Pair(LandmarkIndices.RIGHT_HIP, LandmarkIndices.RIGHT_KNEE),
+                Pair(LandmarkIndices.RIGHT_KNEE, LandmarkIndices.RIGHT_ANKLE),
+
+                // Feet
+                Pair(LandmarkIndices.LEFT_ANKLE, LandmarkIndices.LEFT_HEEL),
+                Pair(LandmarkIndices.LEFT_HEEL, LandmarkIndices.LEFT_FOOT_INDEX),
+                Pair(LandmarkIndices.LEFT_ANKLE, LandmarkIndices.LEFT_FOOT_INDEX),
+                Pair(LandmarkIndices.RIGHT_ANKLE, LandmarkIndices.RIGHT_HEEL),
+                Pair(LandmarkIndices.RIGHT_HEEL, LandmarkIndices.RIGHT_FOOT_INDEX),
+                Pair(LandmarkIndices.RIGHT_ANKLE, LandmarkIndices.RIGHT_FOOT_INDEX)
             )
 
-            val allConnections = connections + headConnections
-
-            allConnections.forEach { (startIndex, endIndex) ->
+            connections.forEach { (startIndex, endIndex) ->
                 if (startIndex < scaledLandmarks.size && endIndex < scaledLandmarks.size) {
-                    drawLine(canvas, scaledLandmarks[startIndex], scaledLandmarks[endIndex])
+                    // Only draw if both points are reasonably visible
+                    if (landmarkList[startIndex].visibility().orElse(0f) > 0.5f &&
+                        landmarkList[endIndex].visibility().orElse(0f) > 0.5f) {
+                        drawLine(canvas, scaledLandmarks[startIndex], scaledLandmarks[endIndex])
+                    }
                 }
             }
 
-            // Draw individual points (landmarks)
+            // --- NEW: Draw all visible landmarks ---
             scaledLandmarks.forEachIndexed { index, point ->
-                drawPoint(canvas, point, index)
+                // Check the visibility score from the model.
+                // A score of > 0.5 is generally considered "visible".
+                if (landmarkList[index].visibility().orElse(0f) > 0.5f) {
+                    drawPoint(canvas, point)
+                }
             }
 
-            // Draw angle information and feedback
-            drawJointInformation(canvas, scaledLandmarks)
-
-            // Draw general feedback messages at the bottom
-            drawGeneralFeedback(canvas, viewWidth, viewHeight)
+            // Draw angle information (this logic remains the same)
+            drawAngleInformation(canvas, scaledLandmarks)
         }
     }
 
-    private fun drawJointInformation(canvas: Canvas, scaledLandmarks: List<PointF>) {
-        // Map angle names to a representative joint index for drawing purposes
+    private fun drawAngleInformation(canvas: Canvas, scaledLandmarks: List<PointF>) {
         val angleJointMap = mapOf(
             "Left Elbow Angle" to LandmarkIndices.LEFT_ELBOW,
             "Right Elbow Angle" to LandmarkIndices.RIGHT_ELBOW,
@@ -189,124 +149,24 @@ class PoseOverlay(context: Context) : View(context) {
             "Left Shoulder Angle" to LandmarkIndices.LEFT_SHOULDER,
             "Right Shoulder Angle" to LandmarkIndices.RIGHT_SHOULDER,
             "Left Hip Angle" to LandmarkIndices.LEFT_HIP,
-            "Right Hip Angle" to LandmarkIndices.RIGHT_HIP,
-            "Left Ankle Angle" to LandmarkIndices.LEFT_ANKLE,
-            "Right Ankle Angle" to LandmarkIndices.RIGHT_ANKLE,
-            "Torso Angle" to LandmarkIndices.LEFT_HIP // Use Left Hip as a proxy for torso
+            "Right Hip Angle" to LandmarkIndices.RIGHT_HIP
         )
 
-        // Pre-process feedback messages to associate with joints
-        val jointFeedbackMap = mutableMapOf<Int, MutableList<String>>()
-        feedbackMessages.forEach { msg ->
-            when {
-                msg.contains("Knee Angle", ignoreCase = true) -> {
-                    if (msg.contains("Left", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.LEFT_KNEE) { mutableListOf() }.add(msg)
-                    else if (msg.contains("Right", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.RIGHT_KNEE) { mutableListOf() }.add(msg)
-                }
-                msg.contains("Hip Angle", ignoreCase = true) -> {
-                    if (msg.contains("Left", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.LEFT_HIP) { mutableListOf() }.add(msg)
-                    else if (msg.contains("Right", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.RIGHT_HIP) { mutableListOf() }.add(msg)
-                }
-                msg.contains("Elbow Angle", ignoreCase = true) -> {
-                    if (msg.contains("Left", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.LEFT_ELBOW) { mutableListOf() }.add(msg)
-                    else if (msg.contains("Right", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.RIGHT_ELBOW) { mutableListOf() }.add(msg)
-                }
-                msg.contains("Shoulder Angle", ignoreCase = true) -> {
-                    if (msg.contains("Left", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.LEFT_SHOULDER) { mutableListOf() }.add(msg)
-                    else if (msg.contains("Right", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.RIGHT_SHOULDER) { mutableListOf() }.add(msg)
-                }
-                msg.contains("Ankle Angle", ignoreCase = true) -> {
-                    if (msg.contains("Left", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.LEFT_ANKLE) { mutableListOf() }.add(msg)
-                    else if (msg.contains("Right", ignoreCase = true)) jointFeedbackMap.getOrPut(LandmarkIndices.RIGHT_ANKLE) { mutableListOf() }.add(msg)
-                }
-                msg.contains("Torso Angle", ignoreCase = true) -> {
-                    jointFeedbackMap.getOrPut(LandmarkIndices.LEFT_HIP) { mutableListOf() }.add(msg)
-                }
-            }
-        }
-
-        val angleTextOffsetY = -40f // Position angle text above the joint
-        val feedbackTextOffsetY = 40f // Position feedback text below the joint
+        val angleTextOffsetY = -40f
 
         anglesToDisplay.forEach { (angleName, angleValue) ->
             val jointIndex = angleJointMap[angleName]
             if (jointIndex != null && jointIndex < scaledLandmarks.size) {
                 val jointPoint = scaledLandmarks[jointIndex]
-
                 val angleText = "%.0f°".format(angleValue)
-                var currentAngleTextPaint = angleTextDefaultPaint
 
-                // Determine angle text color based on current phase's absolute target ranges
-                currentPhaseInfo?.targetAngles?.get(angleName)?.let { targetRange ->
-                    currentAngleTextPaint = when {
-                        // Check if angle is within the target range
-                        angleValue >= targetRange.min && angleValue <= targetRange.max -> angleTextGoodPaint
-                        // Check if angle is close to the target range (within 5 degrees)
-                        angleValue >= targetRange.min - 5 && angleValue < targetRange.min ||
-                                angleValue > targetRange.max && angleValue <= targetRange.max + 5 -> angleTextWarningPaint
-                        // Otherwise, out of range
-                        else -> angleTextBadPaint
-                    }
-                }
-                // If there are relative target angles, you might need more complex logic to color.
-                // For simplicity, we prioritize absolute targets first.
-                // You could add logic here for relative targets if needed.
-
-                // Draw current angle value
                 canvas.drawText(
                     angleText,
                     jointPoint.x,
                     jointPoint.y + angleTextOffsetY,
-                    currentAngleTextPaint
+                    angleTextPaint
                 )
-
-                // Draw specific feedback messages near the joint, if available
-                val specificJointFeedbacks = jointFeedbackMap[jointIndex]
-                if (!specificJointFeedbacks.isNullOrEmpty()) {
-                    var currentFeedbackY = jointPoint.y + feedbackTextOffsetY
-                    specificJointFeedbacks.forEach { feedback ->
-                        // Clean the feedback message to remove angle values/targets
-                        val cleanFeedback = feedback
-                            .split("(Target:")[0].trim()
-                            .replace("Current: .*".toRegex(), "")
-                            .trim()
-
-                        canvas.drawText(
-                            cleanFeedback,
-                            jointPoint.x,
-                            currentFeedbackY,
-                            feedbackTextPaint
-                        )
-                        currentFeedbackY += feedbackTextPaint.textSize * 1.2f // Add line spacing
-                    }
-                }
             }
-        }
-    }
-
-    // Draws general feedback messages at the bottom center
-    private fun drawGeneralFeedback(canvas: Canvas, viewWidth: Float, viewHeight: Float) {
-        val generalFeedback = feedbackMessages.filter { msg ->
-            // Filter out messages that were already handled and drawn near specific joints
-            !msg.contains("Knee Angle", ignoreCase = true) &&
-                    !msg.contains("Hip Angle", ignoreCase = true) &&
-                    !msg.contains("Elbow Angle", ignoreCase = true) &&
-                    !msg.contains("Shoulder Angle", ignoreCase = true) &&
-                    !msg.contains("Ankle Angle", ignoreCase = true) &&
-                    !msg.contains("Torso Angle", ignoreCase = true)
-        }
-
-        var textY = viewHeight - 200f // Start drawing feedback from bottom, adjust as needed
-
-        // Only draw the first few general messages to avoid clutter
-        generalFeedback.take(3).forEachIndexed { index, message ->
-            // For general messages, we'll draw the full message.
-            canvas.drawText(
-                message,
-                viewWidth / 2,
-                textY + (index * feedbackTextPaint.textSize * 1.2f),
-                feedbackTextPaint
-            )
         }
     }
 }

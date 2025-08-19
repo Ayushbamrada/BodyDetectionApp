@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.bodydetectionapp"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -68,7 +68,7 @@ dependencies {
     implementation("com.google.mlkit:pose-detection-accurate:18.0.0-beta5")
 
     // MediaPipe (Keeping your specified version as requested)
-    implementation("com.google.mediapipe:tasks-vision:0.10.26")
+    implementation("com.google.mediapipe:tasks-vision:0.10.11") // Correct, stable version
     // IMPORTANT: For PoseLandmarker, you usually need the specific artifact.
     // The previously commented out line `tasks-vision-poselandmarker:0.10.11` is old.
     // If you are using `PoseLandmarkerResult` directly, you need this:
@@ -95,6 +95,7 @@ dependencies {
     // Jetpack Compose Navigation: You had 2.7.7 commented out and 2.7.5 active.
     // For consistency and newer features, you should use one. I'll uncomment and activate 2.7.7.
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation(libs.genai.common)
 
     // Testing dependencies
     testImplementation(libs.junit)
