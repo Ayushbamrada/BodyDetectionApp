@@ -169,7 +169,7 @@ private fun getIconForExercise(exerciseName: String): ImageVector {
     return when (exerciseName.lowercase()) {
         "free movement" -> Icons.Default.Gesture
         "squat" -> Icons.Default.AccessibilityNew
-        "hand raising" -> Icons.Default.Boy // Changed for better representation
+        "overhead hand raising" -> Icons.Default.Boy // Changed for better representation
         "push-up" -> Icons.Default.FitnessCenter
         "sit to stand" -> Icons.Default.Chair
         "marching in place" -> Icons.Default.RunCircle

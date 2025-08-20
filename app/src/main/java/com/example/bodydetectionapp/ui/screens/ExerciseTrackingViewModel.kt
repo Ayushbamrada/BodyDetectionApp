@@ -5,9 +5,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.bodydetectionapp.data.models.Exercise
-import com.example.bodydetectionapp.data.models.Landmark
-import com.example.bodydetectionapp.data.models.RepTimestamp
+import com.example.bodydetectionapp.data.models.*
 import com.example.bodydetectionapp.ml.ExerciseEvaluator
 import com.example.bodydetectionapp.ml.ExerciseState
 import com.example.bodydetectionapp.ml.PoseDetectionHelper
@@ -48,20 +46,16 @@ class ExerciseTrackingViewModel : ViewModel() {
     val exerciseStartTime: StateFlow<Long?> = _exerciseStartTime.asStateFlow()
 
     init {
-        Log.d("ViewModel", "ViewModel Initialized.")
         exerciseEvaluator.onRepCompleted = { count ->
-            Log.d("ViewModelCallback", "onRepCompleted: $count")
             _repCount.value = count
             if (_exerciseStartTime.value != null) {
                 repTimestamps.add(RepTimestamp(count, System.currentTimeMillis()))
             }
         }
         exerciseEvaluator.onFeedbackUpdate = { message ->
-            Log.d("ViewModelCallback", "onFeedbackUpdate: '$message'")
             _feedbackMessage.value = message
         }
         exerciseEvaluator.onStateChanged = { newState ->
-            Log.d("ViewModelCallback", "onStateChanged: $newState")
             _exerciseState.value = newState
             if (newState == ExerciseState.IN_PROGRESS && _exerciseStartTime.value == null) {
                 _exerciseStartTime.value = System.currentTimeMillis()
@@ -69,36 +63,31 @@ class ExerciseTrackingViewModel : ViewModel() {
             }
         }
         exerciseEvaluator.onCountdownTick = { tick ->
-            Log.d("ViewModelCallback", "onCountdownTick: $tick")
             _countdownValue.value = tick
         }
     }
 
     fun initializePoseDetectionHelper(context: Context) {
         if (poseDetectionHelper == null) {
-            Log.d("ViewModel", "Initializing PoseDetectionHelper...")
             poseDetectionHelper = PoseDetectionHelper(context) { result, landmarks, angles ->
                 processPoseResult(result, landmarks, angles)
             }
-            Log.d("ViewModel", "PoseDetectionHelper Initialized.")
         }
     }
 
     fun setExercise(exercise: Exercise) {
-        Log.d("ViewModel", "Setting exercise to: ${exercise.name}")
         _currentExercise.value = exercise
         exerciseEvaluator.setExercise(exercise)
         _repCount.value = 0
         repTimestamps.clear()
         _exerciseStartTime.value = null
         _feedbackMessage.value = "Waiting for user to get in position."
-        Log.d("ViewModel", "State has been reset for new exercise.")
     }
 
     fun detectPose(bitmap: Bitmap) {
-        // This log can be spammy, so we keep it commented out unless needed.
-        // Log.d("ViewModel", "Submitting frame for detection.")
-        poseDetectionHelper?.detect(bitmap)
+        viewModelScope.launch {
+            poseDetectionHelper?.detect(bitmap)
+        }
     }
 
     private fun processPoseResult(
@@ -106,15 +95,9 @@ class ExerciseTrackingViewModel : ViewModel() {
         landmarks: Map<String, Landmark>?,
         angles: Map<String, Double>?
     ) {
-        // This is the fix from before, ensuring UI updates happen on the main thread.
         viewModelScope.launch {
-            Log.d("ViewModel", "processPoseResult: Received data from helper. Landmarks detected: ${landmarks != null}, Angles calculated: ${angles != null}")
             _poseResult.value = result
-
-            Log.d("ViewModel", "Calling evaluator.evaluate() with current state: ${_exerciseState.value}")
             exerciseEvaluator.evaluate(landmarks, angles)
-            Log.d("ViewModel", "Finished evaluator.evaluate()")
-
             angles?.let {
                 _anglesToDisplay.value = filterAnglesForDisplay(it)
             }
@@ -123,13 +106,16 @@ class ExerciseTrackingViewModel : ViewModel() {
 
     private fun filterAnglesForDisplay(allAngles: Map<String, Double>): Map<String, Double> {
         val exercise = _currentExercise.value ?: return allAngles
-        val relevantAngleNames = exercise.repCounter.keyJointsToTrack
+        // --- FIX: Access keyJointsToTrack from the primaryMovement property ---
+        val relevantAngleNames = when (val movement = exercise.primaryMovement) {
+            is AngleMovement -> movement.keyJointsToTrack
+            else -> emptyList() // Distance-based movements don't have key angles to display
+        }
         return allAngles.filterKeys { it in relevantAngleNames }
     }
 
     override fun onCleared() {
         super.onCleared()
-        Log.d("ViewModel", "ViewModel cleared. Closing PoseDetectionHelper.")
         poseDetectionHelper?.close()
     }
 }

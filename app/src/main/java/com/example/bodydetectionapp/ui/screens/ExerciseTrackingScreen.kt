@@ -1,8 +1,10 @@
 package com.example.bodydetectionapp.ui.screens
 
 import android.graphics.Bitmap
+import android.os.Build.VERSION.SDK_INT
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -21,6 +24,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import coil.ImageLoader
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import com.example.bodydetectionapp.data.models.ExerciseDefinitions
 import com.example.bodydetectionapp.ml.ExerciseState
 import com.example.bodydetectionapp.navigation.Screen
@@ -41,7 +48,6 @@ fun ExerciseTrackingScreen(
 ) {
     val context = LocalContext.current
 
-    // Collect all the new state from the ViewModel
     val poseResult by viewModel.poseResult.collectAsState()
     val anglesToDisplay by viewModel.anglesToDisplay.collectAsState()
     val feedbackMessage by viewModel.feedbackMessage.collectAsState()
@@ -52,21 +58,22 @@ fun ExerciseTrackingScreen(
     val exerciseStartTime by viewModel.exerciseStartTime.collectAsState()
 
     var previewView: PreviewView? by remember { mutableStateOf(null) }
+    var showInstructionsDialog by remember { mutableStateOf(true) }
 
-    // Initialize the ViewModel and set the exercise once
+
     LaunchedEffect(Unit) {
         viewModel.initializePoseDetectionHelper(context)
-        // CORRECTED LINE
         val selectedExercise = ExerciseDefinitions.ALL_EXERCISES.find { it.name == exerciseName }
         selectedExercise?.let {
             viewModel.setExercise(it)
         }
     }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(currentExercise?.name ?: "Loading...") },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, titleContentColor = Color.White),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, titleContentColor = Color.Transparent),
                 actions = {
                     IconButton(onClick = {
                         val timestampsJson = Gson().toJson(viewModel.repTimestamps)
@@ -107,9 +114,7 @@ fun ExerciseTrackingScreen(
                 }
             )
 
-            // --- UI Overlay based on ExerciseState ---
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                // Show countdown when in the COUNTDOWN state
                 AnimatedVisibility(
                     visible = exerciseState == ExerciseState.COUNTDOWN,
                     enter = scaleIn() + fadeIn(),
@@ -124,7 +129,6 @@ fun ExerciseTrackingScreen(
                 }
             }
 
-            // Show Rep Counter and Feedback during the exercise
             AnimatedVisibility(
                 visible = exerciseState == ExerciseState.IN_PROGRESS,
                 enter = fadeIn(),
@@ -136,21 +140,11 @@ fun ExerciseTrackingScreen(
                         .padding(top = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        "Reps",
-                        fontSize = 24.sp,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                    Text(
-                        repCount.toString(),
-                        fontSize = 80.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Text("Reps", fontSize = 24.sp, color = Color.White.copy(alpha = 0.8f))
+                    Text(repCount.toString(), fontSize = 80.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
 
-            // Show instructional feedback at the bottom
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -167,20 +161,68 @@ fun ExerciseTrackingScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-
             }
 
-            // This LaunchedEffect now handles the camera frames continuously
-            LaunchedEffect(previewView) {
-                if (previewView == null) return@LaunchedEffect
+            if (showInstructionsDialog && currentExercise != null) {
+                AlertDialog(
+                    onDismissRequest = { /* Prevent dismissing by clicking outside */ },
+                    title = { Text(text = currentExercise!!.name, fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            currentExercise!!.videoResId?.let { gifId ->
+                                // --- FIX: Replaced VideoPlayer with GifPlayer ---
+                                GifPlayer(gifId = gifId, modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(text = currentExercise!!.description)
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = { showInstructionsDialog = false }) {
+                            Text("I'm Ready")
+                        }
+                    }
+                )
+            }
+
+            LaunchedEffect(previewView, showInstructionsDialog) {
+                if (previewView == null || showInstructionsDialog) {
+                    return@LaunchedEffect
+                }
                 while (isActive) {
                     previewView?.bitmap?.let { frameBitmap ->
                         val copyBitmap = frameBitmap.copy(Bitmap.Config.ARGB_8888, true)
                         viewModel.detectPose(copyBitmap)
                     }
-                    delay(33) // ~30 FPS
+                    delay(33)
                 }
             }
         }
     }
+}
+
+// --- NEW: Reusable Composable for playing GIFs from the raw resource folder using Coil ---
+@Composable
+fun GifPlayer(gifId: Int, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    // Create an ImageLoader that can decode GIFs
+    val imageLoader = ImageLoader.Builder(context)
+        .components {
+            if (SDK_INT >= 28) {
+                add(ImageDecoderDecoder.Factory())
+            } else {
+                add(GifDecoder.Factory())
+            }
+        }
+        .build()
+
+    Image(
+        painter = rememberAsyncImagePainter(gifId, imageLoader),
+        contentDescription = "Exercise Demo",
+        modifier = modifier
+    )
 }

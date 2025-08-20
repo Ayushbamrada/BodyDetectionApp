@@ -1,82 +1,170 @@
 //package com.example.bodydetectionapp.data.models
 //
 ///**
-// * Represents a range for an angle, with a minimum and maximum value.
+// * A simple data class to hold 3D landmark coordinates.
 // */
-//data class AngleRange(val min: Double, val max: Double)
+//data class Landmark(val x: Float, val y: Float, val z: Float)
 //
 ///**
-// * Defines a specific phase within an exercise (e.g., "Starting Position", "Bottom of Squat").
-// *
-// * @param name The name of the phase.
-// * @param targetAngles A map of angle names (e.g., "Left Knee Angle") to their target AngleRange.
-// * @param feedbackMessage An optional message to display when the user is in this phase.
+// * Defines the different types of exercises.
+// * SYMMETRICAL: Both sides of the body do the same thing (e.g., Squat).
+// * ALTERNATING: Left and right sides alternate (e.g., Marching).
 // */
-//data class ExercisePhase(
-//    val name: String,
-//    val targetAngles: Map<String, AngleRange>,
-//    val feedbackMessage: String? = null
+//enum class ExerciseType {
+//    SYMMETRICAL,
+//    ALTERNATING
+//}
+//
+///**
+// * A sealed interface representing a rule that must be followed during an exercise
+// * for a repetition to be considered valid.
+// */
+//sealed interface FormRule {
+//    val feedbackMessage: String
+//}
+//
+///**
+// * A rule that checks if a specific joint angle stays within a valid range.
+// * @param angleName The name of the angle to check (e.g., "Left Elbow Angle").
+// * @param minAngle The minimum acceptable angle.
+// * @param maxAngle The maximum acceptable angle.
+// */
+//data class AngleRule(
+//    val angleName: String,
+//    val minAngle: Double,
+//    val maxAngle: Double,
+//    override val feedbackMessage: String
+//) : FormRule
+//
+///**
+// * A rule that checks if two landmarks stay horizontally aligned.
+// * @param landmark1 The name of the first landmark (e.g., "LEFT_KNEE").
+// * @param landmark2 The name of the second landmark (e.g., "LEFT_HIP").
+// * @param maxDistanceRatio The maximum allowed horizontal distance, as a fraction of shoulder width.
+// */
+//data class HorizontalAlignmentRule(
+//    val landmark1: String,
+//    val landmark2: String,
+//    val maxDistanceRatio: Float,
+//    override val feedbackMessage: String
+//) : FormRule
+//
+///**
+// * Defines the core mechanics of the primary movement for an exercise.
+// */
+//data class RepCounter(
+//    val keyJointsToTrack: List<String>,
+//    val entryThreshold: Double,
+//    val exitThreshold: Double
 //)
 //
 ///**
-// * Represents a complete exercise with its name, description, and sequence of phases.
-// *
-// * @param name The name of the exercise.
-// * @param description A brief description of the exercise.
-// * @param phases The ordered list of ExercisePhase objects that define the exercise.
+// * The complete "Exercise Blueprint".
+// * @param formRules A list of FormRules that must be maintained during the rep.
 // */
 //data class Exercise(
 //    val name: String,
 //    val description: String,
-//    val phases: List<ExercisePhase>
+//    val repCounter: RepCounter,
+//    val metValue: Double,
+//    val type: ExerciseType,
+//    val formRules: List<FormRule>,
+//    val videoResId: Int? = null
 //)
 package com.example.bodydetectionapp.data.models
 
 /**
  * A simple data class to hold 3D landmark coordinates.
- * This will be needed by the evaluator for gesture detection.
- * MediaPipe provides these coordinates.
  */
 data class Landmark(val x: Float, val y: Float, val z: Float)
 
 /**
- * An enum to represent the state of a repetition counter.
- * It tracks whether the user is in the starting position, performing the
- * primary movement (e.g., going down in a squat), or returning.
+ * Defines the different types of exercises.
+ * SYMMETRICAL: Both sides of the body do the same thing (e.g., Squat).
+ * ALTERNATING: Left and right sides alternate (e.g., Marching).
  */
-enum class RepetitionState {
-    IDLE,       // Neutral state, ready for a rep
-    IN_PROGRESS // User is in the middle of a rep (e.g., down in a squat)
+enum class ExerciseType {
+    SYMMETRICAL,
+    ALTERNATING
 }
 
 /**
- * Defines the core mechanics of an exercise for the cyclical rep counter.
- *
- * @param keyJointsToTrack A list of joint angle names (e.g., "Left Knee Angle") to monitor.
- * The evaluator will average them or use the most prominent one.
- * @param entryThreshold The angle threshold (in degrees) to start a repetition.
- * For a squat, this is the angle you must go *below* to start the rep.
- * @param exitThreshold The angle threshold (in degrees) to complete a repetition.
- * For a squat, this is the angle you must go *above* to finish the rep.
+ * A sealed interface representing a rule that must be followed during an exercise
+ * for a repetition to be considered valid.
  */
-data class RepCounter(
-    val keyJointsToTrack: List<String>,
-    val entryThreshold: Double,
-    val exitThreshold: Double
-)
+sealed interface FormRule {
+    val feedbackMessage: String
+}
 
 /**
- * Represents a complete exercise with its name, description, and the new RepCounter logic.
- *
- * @param name The name of the exercise.
- * @param description A brief description of the exercise.
- * @param repCounter The RepCounter object that defines how to count reps for this exercise.
- * @param videoResId Optional: For linking to a demo video.
+ * A rule that checks if a specific joint angle stays within a valid range.
+ */
+data class AngleRule(
+    val angleName: String,
+    val minAngle: Double,
+    val maxAngle: Double,
+    override val feedbackMessage: String
+) : FormRule
+
+/**
+ * A rule that checks if two landmarks stay horizontally aligned.
+ */
+data class HorizontalAlignmentRule(
+    val landmark1: String,
+    val landmark2: String,
+    val maxDistanceRatio: Float,
+    override val feedbackMessage: String
+) : FormRule
+
+/**
+ * NEW: A rule that checks the distance between two landmarks.
+ * @param maxDistanceRatio The maximum allowed distance, as a fraction of shoulder width.
+ */
+data class DistanceRule(
+    val landmark1: String,
+    val landmark2: String,
+    val maxDistanceRatio: Float,
+    override val feedbackMessage: String
+) : FormRule
+
+
+/**
+ * NEW: A sealed interface to define the primary movement of an exercise.
+ * This replaces the old RepCounter.
+ */
+sealed interface PrimaryMovement {
+    val entryThreshold: Double
+    val exitThreshold: Double
+}
+
+/**
+ * Defines an angle-based primary movement.
+ */
+data class AngleMovement(
+    val keyJointsToTrack: List<String>,
+    override val entryThreshold: Double,
+    override val exitThreshold: Double
+) : PrimaryMovement
+
+/**
+ * Defines a distance-based primary movement (for crunches).
+ */
+data class DistanceMovement(
+    val landmark1: String,
+    val landmark2: String,
+    override val entryThreshold: Double, // For distance, this is the "close enough" threshold
+    override val exitThreshold: Double  // And this is the "far enough away" threshold
+) : PrimaryMovement
+
+/**
+ * The complete "Exercise Blueprint".
  */
 data class Exercise(
     val name: String,
     val description: String,
-    val repCounter: RepCounter,
-    val metValue: Double, // NEW: Added for calorie calculation
+    val primaryMovement: PrimaryMovement, // UPDATED: Replaced RepCounter
+    val metValue: Double,
+    val type: ExerciseType,
+    val formRules: List<FormRule>,
     val videoResId: Int? = null
 )

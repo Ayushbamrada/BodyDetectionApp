@@ -3,10 +3,11 @@ package com.example.bodydetectionapp.ui.screens
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll // <-- ADD THIS IMPORT
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -38,15 +39,11 @@ import kotlin.math.pow
 
 data class RepDuration(val repCount: Int, val durationSeconds: Float)
 
-// --- NEW HELPER FUNCTION FOR CALORIE CALCULATION ---
 fun calculateCaloriesBurned(exerciseName: String, totalTimeSeconds: Long): String {
     val exercise = ExerciseDefinitions.ALL_EXERCISES.find { it.name == exerciseName }
-    val metValue = exercise?.metValue ?: 3.5 // Default to light exercise MET value
-    val averageWeightKg = 70 // Assume an average user weight of 70kg for this calculation
+    val metValue = exercise?.metValue ?: 3.5
+    val averageWeightKg = 70
     val totalTimeHours = totalTimeSeconds / 3600.0
-
-    // Formula: METs * 3.5 * (body weight in kg) / 200 * (duration in minutes)
-    // Simplified: METs * weight * time_in_hours
     val calories = metValue * averageWeightKg * totalTimeHours
     return "%.1f".format(calories)
 }
@@ -97,7 +94,6 @@ fun ExerciseReportScreen(
         calculatedRepDurations to (totalTime / 1000L).coerceAtLeast(0L)
     }
 
-    // --- NEW: Calculate calories ---
     val caloriesBurned = remember(exerciseName, totalWorkoutTimeSeconds) {
         calculateCaloriesBurned(exerciseName, totalWorkoutTimeSeconds)
     }
@@ -124,7 +120,7 @@ fun ExerciseReportScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState()), // Make screen scrollable
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Card(
@@ -134,7 +130,6 @@ fun ExerciseReportScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
-                // --- MODIFIED: Changed to a Column to better fit 3 items ---
                 Column(
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -164,12 +159,15 @@ fun ExerciseReportScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(350.dp), // Increased height for better graph visibility
+                    .height(350.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (repDurations.isNotEmpty()) {
-                    RepDurationBarGraph(repDurations = repDurations)
+                    // --- MODIFIED: The Bar Graph is now wrapped in a scrollable container ---
+                    Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        RepDurationBarGraph(repDurations = repDurations)
+                    }
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
@@ -215,6 +213,7 @@ fun MetricDisplay(title: String, value: String) {
     }
 }
 
+// --- REVERTED AND IMPROVED: Back to a Bar Graph, but now designed for scrolling ---
 @Composable
 fun RepDurationBarGraph(repDurations: List<RepDuration>) {
     val barColor = MaterialTheme.colorScheme.primary
@@ -222,10 +221,19 @@ fun RepDurationBarGraph(repDurations: List<RepDuration>) {
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
     val density = LocalDensity.current
 
+    // --- NEW: Define a fixed width for each bar and the spacing ---
+    val barWidthDp = 40.dp
+    val spacingDp = 16.dp
+    val numReps = repDurations.size
+
+    // --- NEW: Calculate the total width required for the entire chart ---
+    val totalWidth = (barWidthDp * numReps) + (spacingDp * (numReps - 1))
+
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 40.dp) // Increased padding
+            .width(totalWidth) // The Box now has a fixed, calculated width
+            .fillMaxHeight()
+            .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 40.dp)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val maxDuration = repDurations.maxOfOrNull { it.durationSeconds }?.let { ceil(it * 1.2f) }?.coerceAtLeast(5f) ?: 5f
@@ -236,30 +244,17 @@ fun RepDurationBarGraph(repDurations: List<RepDuration>) {
             val yAxisLabelWidth = with(density) { 45.dp.toPx() }
             val xAxisLabelHeight = with(density) { 30.dp.toPx() }
             val effectiveHeight = size.height - xAxisLabelHeight
-            val effectiveWidth = size.width - yAxisLabelWidth
             val yAxisDrawEnd = effectiveHeight
             val xAxisDrawStart = yAxisLabelWidth
 
-            // --- RESPONSIVE BAR WIDTH AND SPACING LOGIC ---
-            val numReps = repDurations.size
-            val maxBarWidth = with(density) { 30.dp.toPx() }
-            val minSpacing = with(density) { 4.dp.toPx() }
-
-            // Calculate width based on available space
-            var barWidth = (effectiveWidth - (numReps - 1) * minSpacing) / numReps
-            if (barWidth > maxBarWidth) {
-                barWidth = maxBarWidth
-            }
-            val spacingBetweenBars = (effectiveWidth - numReps * barWidth) / (numReps - 1).coerceAtLeast(1)
-
-            // Draw Y-axis labels and grid lines (logic is fine)
+            // Draw Y-axis labels and grid lines
             val desiredNumYLabels = 5
-            val rawStep = safeDurationRange / (desiredNumYLabels - 1).coerceAtLeast(1)
-            val stepSize = if (rawStep > 0) {
-                val exponent = floor(log10(rawStep)).toInt()
+            val rawStepY = safeDurationRange / (desiredNumYLabels - 1).coerceAtLeast(1)
+            val stepSizeY = if (rawStepY > 0) {
+                val exponent = floor(log10(rawStepY)).toInt()
                 val factor = when {
-                    rawStep / (10.0.pow(exponent)) < 2.0 -> 1.0
-                    rawStep / (10.0.pow(exponent)) < 5.0 -> 2.0
+                    rawStepY / (10.0.pow(exponent)) < 2.0 -> 1.0
+                    rawStepY / (10.0.pow(exponent)) < 5.0 -> 2.0
                     else -> 5.0
                 }
                 (factor * (10.0.pow(exponent))).toFloat()
@@ -272,32 +267,44 @@ fun RepDurationBarGraph(repDurations: List<RepDuration>) {
                     drawLine(color = gridColor, start = Offset(xAxisDrawStart, y), end = Offset(size.width, y), strokeWidth = 1f)
                     drawContext.canvas.nativeCanvas.drawText("%.1f".format(currentYLabelValue), xAxisDrawStart - 8.dp.toPx(), y + 4.dp.toPx(), Paint().apply { color = onSurfaceColor.toArgb(); textAlign = Paint.Align.RIGHT; textSize = with(density) { 12.sp.toPx() } })
                 }
-                currentYLabelValue += stepSize
+                currentYLabelValue += stepSizeY
             }
 
-            // --- DYNAMIC LABEL DRAWING LOGIC ---
-            // Determine how many labels we can fit without them overlapping
-            val repLabelPaint = Paint().apply { color = onSurfaceColor.toArgb(); textAlign = Paint.Align.CENTER; textSize = with(density) { 12.sp.toPx() } }
-            val labelWidth = repLabelPaint.measureText("15") // Measure width of a typical label
-            val labelFrequency = if (barWidth + spacingBetweenBars > 0) ceil(labelWidth * 2.5 / (barWidth + spacingBetweenBars)).toInt() else 1
+            // Draw Bars and Labels
+            val barWidthPx = with(density) { barWidthDp.toPx() }
+            val spacingPx = with(density) { spacingDp.toPx() }
+            val repLabelPaint = Paint().apply { color = onSurfaceColor.toArgb(); textAlign = Paint.Align.CENTER; textSize = with(density) { 14.sp.toPx() }; isFakeBoldText = true }
+            val durationLabelPaint = Paint().apply { color = onSurfaceColor.toArgb(); textAlign = Paint.Align.CENTER; textSize = with(density) { 12.sp.toPx() } }
 
             var currentXPosition = xAxisDrawStart
-            repDurations.forEachIndexed { index, repData ->
+            repDurations.forEach { repData ->
                 val barHeight = ((repData.durationSeconds - minDuration) / safeDurationRange) * effectiveHeight
                 val barTopLeftY = yAxisDrawEnd - barHeight
 
-                drawRect(color = barColor, topLeft = Offset(currentXPosition, barTopLeftY), size = Size(barWidth, barHeight))
+                // Draw the bar
+                drawRect(
+                    color = barColor,
+                    topLeft = Offset(currentXPosition, barTopLeftY),
+                    size = Size(barWidthPx, barHeight)
+                )
 
-                // Only draw rep number label if it fits
-                if (index % labelFrequency == 0) {
-                    drawContext.canvas.nativeCanvas.drawText("${repData.repCount}", currentXPosition + barWidth / 2, size.height - (xAxisLabelHeight / 2) + 8.dp.toPx(), repLabelPaint)
-                }
+                // Draw the duration text above the bar
+                drawContext.canvas.nativeCanvas.drawText(
+                    "%.1fs".format(repData.durationSeconds),
+                    currentXPosition + barWidthPx / 2,
+                    barTopLeftY - 8.dp.toPx(), // Add some padding
+                    durationLabelPaint
+                )
 
-                // Only draw duration text if the bar is wide enough
-                if (barWidth > with(density) { 15.dp.toPx() }) {
-                    drawContext.canvas.nativeCanvas.drawText("%.1fs".format(repData.durationSeconds), currentXPosition + barWidth / 2, barTopLeftY - 5.dp.toPx(), Paint().apply { color = onSurfaceColor.toArgb(); textAlign = Paint.Align.CENTER; textSize = with(density) { 11.sp.toPx() }; isFakeBoldText = true })
-                }
-                currentXPosition += barWidth + spacingBetweenBars
+                // Draw the rep number below the bar
+                drawContext.canvas.nativeCanvas.drawText(
+                    "${repData.repCount}",
+                    currentXPosition + barWidthPx / 2,
+                    size.height - (xAxisLabelHeight / 2) + 10.dp.toPx(), // Position cleanly at the bottom
+                    repLabelPaint
+                )
+
+                currentXPosition += barWidthPx + spacingPx
             }
         }
     }
