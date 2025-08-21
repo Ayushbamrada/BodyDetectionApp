@@ -83,6 +83,7 @@ object ExerciseDefinitions {
         name = "Squat",
         description = "A full-body exercise that trains the hips, thighs, and glutes.",
         type = ExerciseType.SYMMETRICAL,
+        cameraView = CameraView.FRONT, // This is a front-facing exercise
         primaryMovement = AngleMovement(
             keyJointsToTrack = listOf("Left Knee Angle", "Right Knee Angle"),
             entryThreshold = 120.0,
@@ -99,6 +100,7 @@ object ExerciseDefinitions {
         name = "Overhead Hand Raising",
         description = "Raise arms vertically overhead, maintaining straight elbows.",
         type = ExerciseType.SYMMETRICAL,
+        cameraView = CameraView.FRONT, // This is a front-facing exercise
         primaryMovement = AngleMovement(
             keyJointsToTrack = listOf("Left Shoulder Angle", "Right Shoulder Angle"),
             entryThreshold = 120.0,
@@ -116,6 +118,7 @@ object ExerciseDefinitions {
         name = "Marching in Place",
         description = "Lift your knees alternately to warm up your body.",
         type = ExerciseType.ALTERNATING,
+        cameraView = CameraView.FRONT, // This is a front-facing exercise
         primaryMovement = AngleMovement(
             keyJointsToTrack = listOf("Left Hip Angle", "Right Hip Angle"),
             entryThreshold = 130.0,
@@ -133,8 +136,9 @@ object ExerciseDefinitions {
         name = "Flutter Kicks",
         description = "Lie on your back and make small, rapid kicking motions.",
         type = ExerciseType.ALTERNATING,
+        cameraView = CameraView.SIDE, // THIS IS A SIDE-VIEW EXERCISE
         primaryMovement = AngleMovement(
-            keyJointsToTrack = listOf("Left Hip Angle", "Right Hip Angle"),
+            keyJointsToTrack = listOf("Left Hip Angle", "Right Hip Angle"), // Evaluator will pick the visible one
             entryThreshold = 165.0,
             exitThreshold = 175.0
         ),
@@ -150,11 +154,11 @@ object ExerciseDefinitions {
         name = "Bicycle Crunches",
         description = "Bring your opposite knee to your opposite elbow in an alternating motion.",
         type = ExerciseType.ALTERNATING,
-        primaryMovement = DistanceMovement(
-            landmark1 = "ELBOW",
-            landmark2 = "KNEE",
-            entryThreshold = 0.25,
-            exitThreshold = 0.5
+        cameraView = CameraView.SIDE, // THIS IS A SIDE-VIEW EXERCISE
+        primaryMovement = AngleMovement(
+            keyJointsToTrack = listOf("Left Torso Angle", "Right Torso Angle"), // Using torso angle for side view
+            entryThreshold = 130.0, // Torso crunches forward
+            exitThreshold = 150.0  // Torso extends back
         ),
         metValue = 5.0,
         formRules = listOf(),
@@ -165,6 +169,7 @@ object ExerciseDefinitions {
         name = "Standing Oblique Crunches",
         description = "Bring your knee up towards your elbow on the same side.",
         type = ExerciseType.ALTERNATING,
+        cameraView = CameraView.FRONT, // This is a front-facing exercise
         primaryMovement = DistanceMovement(
             landmark1 = "ELBOW",
             landmark2 = "KNEE",
@@ -182,6 +187,7 @@ object ExerciseDefinitions {
         name = "Sit to Stand",
         description = "Transition from a seated to a standing position.",
         type = ExerciseType.SYMMETRICAL,
+        cameraView = CameraView.FRONT, // This is a front-facing exercise
         primaryMovement = AngleMovement(
             keyJointsToTrack = listOf("Left Knee Angle", "Right Knee Angle", "Left Hip Angle", "Right Hip Angle"),
             entryThreshold = 160.0,
@@ -203,4 +209,5 @@ object ExerciseDefinitions {
         SIT_TO_STAND
     )
 }
+
 

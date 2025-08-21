@@ -73,32 +73,23 @@
 //)
 package com.example.bodydetectionapp.data.models
 
-/**
- * A simple data class to hold 3D landmark coordinates.
- */
 data class Landmark(val x: Float, val y: Float, val z: Float)
 
-/**
- * Defines the different types of exercises.
- * SYMMETRICAL: Both sides of the body do the same thing (e.g., Squat).
- * ALTERNATING: Left and right sides alternate (e.g., Marching).
- */
 enum class ExerciseType {
     SYMMETRICAL,
     ALTERNATING
 }
 
-/**
- * A sealed interface representing a rule that must be followed during an exercise
- * for a repetition to be considered valid.
- */
+// --- NEW: Defines the expected camera position for the exercise ---
+enum class CameraView {
+    FRONT,
+    SIDE
+}
+
 sealed interface FormRule {
     val feedbackMessage: String
 }
 
-/**
- * A rule that checks if a specific joint angle stays within a valid range.
- */
 data class AngleRule(
     val angleName: String,
     val minAngle: Double,
@@ -106,9 +97,6 @@ data class AngleRule(
     override val feedbackMessage: String
 ) : FormRule
 
-/**
- * A rule that checks if two landmarks stay horizontally aligned.
- */
 data class HorizontalAlignmentRule(
     val landmark1: String,
     val landmark2: String,
@@ -116,10 +104,6 @@ data class HorizontalAlignmentRule(
     override val feedbackMessage: String
 ) : FormRule
 
-/**
- * NEW: A rule that checks the distance between two landmarks.
- * @param maxDistanceRatio The maximum allowed distance, as a fraction of shoulder width.
- */
 data class DistanceRule(
     val landmark1: String,
     val landmark2: String,
@@ -127,33 +111,22 @@ data class DistanceRule(
     override val feedbackMessage: String
 ) : FormRule
 
-
-/**
- * NEW: A sealed interface to define the primary movement of an exercise.
- * This replaces the old RepCounter.
- */
 sealed interface PrimaryMovement {
     val entryThreshold: Double
     val exitThreshold: Double
 }
 
-/**
- * Defines an angle-based primary movement.
- */
 data class AngleMovement(
     val keyJointsToTrack: List<String>,
     override val entryThreshold: Double,
     override val exitThreshold: Double
 ) : PrimaryMovement
 
-/**
- * Defines a distance-based primary movement (for crunches).
- */
 data class DistanceMovement(
     val landmark1: String,
     val landmark2: String,
-    override val entryThreshold: Double, // For distance, this is the "close enough" threshold
-    override val exitThreshold: Double  // And this is the "far enough away" threshold
+    override val entryThreshold: Double,
+    override val exitThreshold: Double
 ) : PrimaryMovement
 
 /**
@@ -162,9 +135,10 @@ data class DistanceMovement(
 data class Exercise(
     val name: String,
     val description: String,
-    val primaryMovement: PrimaryMovement, // UPDATED: Replaced RepCounter
+    val primaryMovement: PrimaryMovement,
     val metValue: Double,
     val type: ExerciseType,
+    val cameraView: CameraView, // NEW: Added camera view property
     val formRules: List<FormRule>,
     val videoResId: Int? = null
 )
