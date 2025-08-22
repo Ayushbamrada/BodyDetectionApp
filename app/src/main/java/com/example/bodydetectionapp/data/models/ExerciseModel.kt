@@ -1,76 +1,3 @@
-//package com.example.bodydetectionapp.data.models
-//
-///**
-// * A simple data class to hold 3D landmark coordinates.
-// */
-//data class Landmark(val x: Float, val y: Float, val z: Float)
-//
-///**
-// * Defines the different types of exercises.
-// * SYMMETRICAL: Both sides of the body do the same thing (e.g., Squat).
-// * ALTERNATING: Left and right sides alternate (e.g., Marching).
-// */
-//enum class ExerciseType {
-//    SYMMETRICAL,
-//    ALTERNATING
-//}
-//
-///**
-// * A sealed interface representing a rule that must be followed during an exercise
-// * for a repetition to be considered valid.
-// */
-//sealed interface FormRule {
-//    val feedbackMessage: String
-//}
-//
-///**
-// * A rule that checks if a specific joint angle stays within a valid range.
-// * @param angleName The name of the angle to check (e.g., "Left Elbow Angle").
-// * @param minAngle The minimum acceptable angle.
-// * @param maxAngle The maximum acceptable angle.
-// */
-//data class AngleRule(
-//    val angleName: String,
-//    val minAngle: Double,
-//    val maxAngle: Double,
-//    override val feedbackMessage: String
-//) : FormRule
-//
-///**
-// * A rule that checks if two landmarks stay horizontally aligned.
-// * @param landmark1 The name of the first landmark (e.g., "LEFT_KNEE").
-// * @param landmark2 The name of the second landmark (e.g., "LEFT_HIP").
-// * @param maxDistanceRatio The maximum allowed horizontal distance, as a fraction of shoulder width.
-// */
-//data class HorizontalAlignmentRule(
-//    val landmark1: String,
-//    val landmark2: String,
-//    val maxDistanceRatio: Float,
-//    override val feedbackMessage: String
-//) : FormRule
-//
-///**
-// * Defines the core mechanics of the primary movement for an exercise.
-// */
-//data class RepCounter(
-//    val keyJointsToTrack: List<String>,
-//    val entryThreshold: Double,
-//    val exitThreshold: Double
-//)
-//
-///**
-// * The complete "Exercise Blueprint".
-// * @param formRules A list of FormRules that must be maintained during the rep.
-// */
-//data class Exercise(
-//    val name: String,
-//    val description: String,
-//    val repCounter: RepCounter,
-//    val metValue: Double,
-//    val type: ExerciseType,
-//    val formRules: List<FormRule>,
-//    val videoResId: Int? = null
-//)
 package com.example.bodydetectionapp.data.models
 
 data class Landmark(val x: Float, val y: Float, val z: Float)
@@ -80,10 +7,17 @@ enum class ExerciseType {
     ALTERNATING
 }
 
-// --- NEW: Defines the expected camera position for the exercise ---
 enum class CameraView {
     FRONT,
     SIDE
+}
+
+enum class BodyPart {
+    UPPER_BODY,
+    LOWER_BODY,
+    CORE,
+    FULL_BODY,
+    YOGA
 }
 
 sealed interface FormRule {
@@ -129,16 +63,14 @@ data class DistanceMovement(
     override val exitThreshold: Double
 ) : PrimaryMovement
 
-/**
- * The complete "Exercise Blueprint".
- */
 data class Exercise(
     val name: String,
     val description: String,
     val primaryMovement: PrimaryMovement,
     val metValue: Double,
     val type: ExerciseType,
-    val cameraView: CameraView, // NEW: Added camera view property
+    val cameraView: CameraView,
+    val bodyPart: BodyPart,
     val formRules: List<FormRule>,
     val videoResId: Int? = null
 )

@@ -1,6 +1,5 @@
 package com.example.bodydetectionapp.ui.screens
 
-
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,51 +18,38 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.bodydetectionapp.R
+import com.example.bodydetectionapp.data.repository.UserRepository
 import com.example.bodydetectionapp.navigation.Screen
 import kotlinx.coroutines.delay
 
-
 @Composable
-fun SplashScreen(navController: NavController) {
-    val scale = remember { Animatable(0f) }
-    val fullText = "Your AI Exercise App"
-    var visibleText by remember { mutableStateOf("") }
-
+fun SplashScreen(navController: NavController, userRepository: UserRepository) {
+    val logoScale = remember { Animatable(0f) }
+    val appTitle = "Your AI Exercise App"
+    var visibleAppTitle by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        // Animate the logo scaling up
-        scale.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = 1500,
-                easing = FastOutSlowInEasing
-            )
-        )
-
-
-        // A brief pause after the logo appears
-        delay(300)
-
-
-        // Animate the text character by character
-        fullText.forEach { char ->
-            visibleText += char
-            delay(50) // Delay between each character appearing
+        appTitle.forEach { char ->
+            visibleAppTitle += char
+            delay(50)
         }
-
-
-        // Hold the full screen for a moment before navigating
+        delay(300)
+        logoScale.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing)
+        )
         delay(1000)
 
-
-        // Navigate to the next screen
-        navController.navigate(Screen.ExerciseSelection.route) {
-            popUpTo(Screen.Splash.route) {
-                inclusive = true
-            }
+        // --- FIX: Logic now correctly checks onboarding status ---
+        val destination = if (userRepository.hasCompletedOnboarding()) {
+            Screen.Home.route
+        } else {
+            Screen.Onboarding.route
+        }
+        navController.navigate(destination) {
+            popUpTo(Screen.Splash.route) { inclusive = true }
         }
     }
-
 
     Box(
         modifier = Modifier
@@ -73,30 +59,37 @@ fun SplashScreen(navController: NavController) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 24.dp) // Add padding for text
+            modifier = Modifier.padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.Center
         ) {
-            // Your app's logo
-            Image(
-                painter = painterResource(id = R.drawable.ripple_healthcare_logo),
-                contentDescription = "Company Logo",
-                modifier = Modifier
-                    .size(200.dp)
-                    .scale(scale.value)
-            )
-
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-
-            // The text that appears character by character
             Text(
-                text = visibleText,
+                text = visibleAppTitle,
                 color = MaterialTheme.colorScheme.primary,
-                fontSize = 26.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.height(70.dp) // Set a fixed height to prevent layout jumps
+                modifier = Modifier
+                    .padding(bottom = 40.dp)
+                    .height(70.dp)
             )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.scale(logoScale.value)
+            ) {
+                Text(
+                    text = "Powered by",
+                    color = Color.Gray,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Image(
+                    painter = painterResource(id = R.drawable.ripple_healthcare_logo),
+                    contentDescription = "Company Logo",
+                    modifier = Modifier.size(260.dp)
+                )
+            }
         }
     }
 }

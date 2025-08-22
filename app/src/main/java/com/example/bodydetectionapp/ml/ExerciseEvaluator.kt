@@ -18,7 +18,7 @@ enum class ExerciseState {
 sealed class RepetitionState {
     object IDLE : RepetitionState()
     object IN_PROGRESS : RepetitionState()
-    object SIDE_VIEW_IN_PROGRESS : RepetitionState() // For single-side tracking
+    object SIDE_VIEW_IN_PROGRESS : RepetitionState()
     object LEFT_SIDE_IN_PROGRESS : RepetitionState()
     object RIGHT_SIDE_IN_PROGRESS : RepetitionState()
 }
@@ -41,7 +41,7 @@ class ExerciseEvaluator {
     private var startGestureTimer: CountDownTimer? = null
     private val START_GESTURE_DURATION_MS = 1500L
     private var stepCount = 0
-    private var visibleSide: String? = null // To store "LEFT" or "RIGHT"
+    private var visibleSide: String? = null
 
     fun setExercise(exercise: Exercise) {
         currentExercise = exercise
@@ -51,10 +51,7 @@ class ExerciseEvaluator {
     fun evaluate(landmarks: Map<String, Landmark>?, angles: Map<String, Double>?) {
         when (exerciseState) {
             ExerciseState.NOT_STARTED -> {
-                landmarks?.let {
-                    updateState(ExerciseState.WAITING_TO_START)
-                    onFeedbackUpdate?.invoke("Raise both hands to start")
-                }
+                landmarks?.let { updateState(ExerciseState.WAITING_TO_START) }
             }
             ExerciseState.WAITING_TO_START -> {
                 landmarks?.let { checkForStartGesture(it) } ?: cancelStartGestureTimer()
@@ -70,7 +67,19 @@ class ExerciseEvaluator {
 
     private fun trackRepetition(landmarks: Map<String, Landmark>, angles: Map<String, Double>) {
         val exercise = currentExercise ?: return
-        // --- NEW: Route to different logic based on camera view ---
+
+        val formFeedback = checkFormRules(landmarks, angles)
+        if (formFeedback.isNotEmpty()) {
+            onFeedbackUpdate?.invoke(formFeedback.joinToString(" "))
+            if (repState != RepetitionState.IDLE) {
+                repState = RepetitionState.IDLE
+                stepCount = 0
+            }
+            return
+        }
+
+        onFeedbackUpdate?.invoke("Keep Going!")
+
         when (exercise.cameraView) {
             CameraView.FRONT -> trackFrontViewRep(landmarks, angles)
             CameraView.SIDE -> trackSideViewRep(landmarks, angles)
@@ -85,31 +94,27 @@ class ExerciseEvaluator {
         }
     }
 
-    // --- NEW: Logic specifically for side-view exercises ---
     private fun trackSideViewRep(landmarks: Map<String, Landmark>, angles: Map<String, Double>) {
         val exercise = currentExercise!!
         val movement = exercise.primaryMovement as? AngleMovement ?: return
 
-        // Determine which side is visible if we don't know yet
         if (visibleSide == null) {
             visibleSide = getVisibleSide(landmarks)
         }
-        val visibleSideNotNull = visibleSide ?: return // Exit if we can't determine the side
+        val visibleSideNotNull = visibleSide ?: return
 
-        // Get the angle for the visible side only
-        val angleToTrack = angles["${visibleSideNotNull}_${movement.keyJointsToTrack[0].split(" ")[1]} Angle"] ?: return
+        val angleNameToTrack = movement.keyJointsToTrack.firstOrNull { it.startsWith(visibleSideNotNull) } ?: return
+        val angleToTrack = angles[angleNameToTrack] ?: return
         val isBending = movement.entryThreshold < movement.exitThreshold
 
         when (repState) {
             RepetitionState.IDLE -> {
-                onFeedbackUpdate?.invoke("Begin ${exercise.name}")
                 if ((isBending && angleToTrack < movement.entryThreshold) ||
-                    (!isBending && angleToTrack > movement.entryThreshold)) {
+                    (!isBending && angleToTrack > movement.exitThreshold)) {
                     repState = RepetitionState.SIDE_VIEW_IN_PROGRESS
                 }
             }
             RepetitionState.SIDE_VIEW_IN_PROGRESS -> {
-                onFeedbackUpdate?.invoke("Finish the movement")
                 if ((isBending && angleToTrack > movement.exitThreshold) ||
                     (!isBending && angleToTrack < movement.exitThreshold)) {
                     stepCount++
@@ -119,7 +124,6 @@ class ExerciseEvaluator {
             else -> {}
         }
 
-        // For side view, every 2 steps (assumed left/right) is one rep
         if (stepCount >= 2) {
             repCount++
             onRepCompleted?.invoke(repCount)
@@ -128,15 +132,12 @@ class ExerciseEvaluator {
     }
 
     private fun getVisibleSide(landmarks: Map<String, Landmark>): String? {
-        val leftHip = landmarks["LEFT_HIP"]?.z ?: return null
-        val rightHip = landmarks["RIGHT_HIP"]?.z ?: return null
-        // The side with the smaller Z value is closer to the camera
-        return if (leftHip < rightHip) "LEFT" else "RIGHT"
+        val leftHipZ = landmarks["LEFT_HIP"]?.z ?: return null
+        val rightHipZ = landmarks["RIGHT_HIP"]?.z ?: return null
+        return if (leftHipZ < rightHipZ) "LEFT" else "RIGHT"
     }
 
-
     private fun trackSymmetricalRep(landmarks: Map<String, Landmark>, angles: Map<String, Double>) {
-        // This function remains the same
         val exercise = currentExercise!!
         val movement = exercise.primaryMovement as? AngleMovement ?: return
         val relevantAngles = movement.keyJointsToTrack.mapNotNull { angles[it] }
@@ -154,12 +155,6 @@ class ExerciseEvaluator {
             is RepetitionState.IN_PROGRESS -> {
                 if ((isBendingMovement && currentAngle > movement.exitThreshold) ||
                     (!isBendingMovement && currentAngle < movement.exitThreshold)) {
-                    val formFeedback = checkFormRules(landmarks, angles)
-                    if (formFeedback != null) {
-                        onFeedbackUpdate?.invoke(formFeedback)
-                        repState = RepetitionState.IDLE
-                        return
-                    }
                     repCount++
                     onRepCompleted?.invoke(repCount)
                     repState = RepetitionState.IDLE
@@ -170,22 +165,13 @@ class ExerciseEvaluator {
     }
 
     private fun trackAlternatingRep(landmarks: Map<String, Landmark>, angles: Map<String, Double>) {
-        // This function now only handles FRONT view alternating exercises
-        val exercise = currentExercise!!
-        val formFeedback = checkFormRules(landmarks, angles)
-        if (formFeedback != null) {
-            onFeedbackUpdate?.invoke(formFeedback)
-            return
-        }
-
-        when (val movement = exercise.primaryMovement) {
+        when (val movement = currentExercise!!.primaryMovement) {
             is AngleMovement -> trackAlternatingAngleRep(angles, movement)
             is DistanceMovement -> trackAlternatingDistanceRep(landmarks, movement)
         }
     }
 
     private fun trackAlternatingAngleRep(angles: Map<String, Double>, movement: AngleMovement) {
-        // This function remains the same
         val leftAngle = angles[movement.keyJointsToTrack[0]] ?: return
         val rightAngle = angles[movement.keyJointsToTrack[1]] ?: return
         val isBending = movement.entryThreshold < movement.exitThreshold
@@ -218,7 +204,6 @@ class ExerciseEvaluator {
     }
 
     private fun trackAlternatingDistanceRep(landmarks: Map<String, Landmark>, movement: DistanceMovement) {
-        // This function remains the same
         val shoulderWidth = abs((landmarks["LEFT_SHOULDER"]?.x ?: 0f) - (landmarks["RIGHT_SHOULDER"]?.x ?: 1f))
         if (shoulderWidth == 0f) return
 
@@ -264,20 +249,35 @@ class ExerciseEvaluator {
         if (lm1 == null || lm2 == null) return Float.MAX_VALUE
         val dx = lm1.x - lm2.x
         val dy = lm1.y - lm2.y
-        return sqrt(dx.pow(2) + dy.pow(2))
+        return sqrt((dx * dx) + (dy * dy))
     }
 
-    private fun checkFormRules(landmarks: Map<String, Landmark>, angles: Map<String, Double>): String? {
-        // This function remains mostly the same
-        val exercise = currentExercise ?: return null
-        if (repState == RepetitionState.IDLE) return null
+    private fun checkFormRules(landmarks: Map<String, Landmark>, angles: Map<String, Double>): List<String> {
+        val exercise = currentExercise ?: return emptyList()
+        if (repState == RepetitionState.IDLE) return emptyList()
+
+        val feedbackMessages = mutableListOf<String>()
 
         for (rule in exercise.formRules) {
             when (rule) {
                 is AngleRule -> {
-                    val angle = angles[rule.angleName] ?: continue
-                    if (angle < rule.minAngle || angle > rule.maxAngle) {
-                        return rule.feedbackMessage
+                    if (rule.angleName.contains("Left") || rule.angleName.contains("Right")) {
+                        val leftAngleName = rule.angleName.replace("Right", "Left")
+                        val rightAngleName = rule.angleName.replace("Left", "Right")
+                        val leftAngle = angles[leftAngleName]
+                        val rightAngle = angles[rightAngleName]
+
+                        if (leftAngle != null && (leftAngle < rule.minAngle || leftAngle > rule.maxAngle)) {
+                            feedbackMessages.add(rule.feedbackMessage.replace("right", "left").replace("Right", "Left"))
+                        }
+                        if (rightAngle != null && (rightAngle < rule.minAngle || rightAngle > rule.maxAngle)) {
+                            feedbackMessages.add(rule.feedbackMessage.replace("left", "right").replace("Left", "Right"))
+                        }
+                    } else {
+                        val angle = angles[rule.angleName] ?: continue
+                        if (angle < rule.minAngle || angle > rule.maxAngle) {
+                            feedbackMessages.add(rule.feedbackMessage)
+                        }
                     }
                 }
                 is HorizontalAlignmentRule -> {
@@ -287,37 +287,25 @@ class ExerciseEvaluator {
                     if (shoulderWidth == 0f) continue
                     val horizontalDistance = abs(lm1.x - lm2.x)
                     if (horizontalDistance / shoulderWidth > rule.maxDistanceRatio) {
-                        return rule.feedbackMessage
+                        feedbackMessages.add(rule.feedbackMessage)
                     }
                 }
                 is DistanceRule -> {
                     val shoulderWidth = abs((landmarks["LEFT_SHOULDER"]?.x ?: 0f) - (landmarks["RIGHT_SHOULDER"]?.x ?: 1f))
                     if (shoulderWidth == 0f) continue
-                    val checkLeft = (repState == RepetitionState.LEFT_SIDE_IN_PROGRESS)
-                    val checkRight = (repState == RepetitionState.RIGHT_SIDE_IN_PROGRESS)
-                    if (checkLeft) {
-                        val lm1 = landmarks["LEFT_${rule.landmark1}"]
-                        val lm2 = landmarks["LEFT_${rule.landmark2}"]
-                        val distance = getDistance(lm1, lm2) / shoulderWidth
-                        if (distance > rule.maxDistanceRatio) {
-                            return rule.feedbackMessage
-                        }
-                    }
-                    if (checkRight) {
-                        val lm1 = landmarks["RIGHT_${rule.landmark1}"]
-                        val lm2 = landmarks["RIGHT_${rule.landmark2}"]
-                        val distance = getDistance(lm1, lm2) / shoulderWidth
-                        if (distance > rule.maxDistanceRatio) {
-                            return rule.feedbackMessage
-                        }
+
+                    val lm1 = landmarks[rule.landmark1] ?: continue
+                    val lm2 = landmarks[rule.landmark2] ?: continue
+                    val distance = getDistance(lm1, lm2) / shoulderWidth
+                    if (distance > rule.maxDistanceRatio) {
+                        feedbackMessages.add(rule.feedbackMessage)
                     }
                 }
             }
         }
-        return null
+        return feedbackMessages
     }
 
-    // --- Other helper functions (checkForStartGesture, etc.) are unchanged ---
     private fun checkForStartGesture(landmarks: Map<String, Landmark>) {
         val leftWrist = landmarks["LEFT_WRIST"]
         val rightWrist = landmarks["RIGHT_WRIST"]
@@ -359,6 +347,9 @@ class ExerciseEvaluator {
     private fun updateState(newState: ExerciseState) {
         if (exerciseState != newState) {
             exerciseState = newState
+            if (newState == ExerciseState.WAITING_TO_START) {
+                onFeedbackUpdate?.invoke("Raise both hands to start")
+            }
             onStateChanged?.invoke(newState)
         }
     }
@@ -375,7 +366,7 @@ class ExerciseEvaluator {
         cancelStartGestureTimer()
         repCount = 0
         stepCount = 0
-        visibleSide = null // Reset visible side
+        visibleSide = null
         repState = RepetitionState.IDLE
         updateState(ExerciseState.NOT_STARTED)
         onRepCompleted?.invoke(repCount)
