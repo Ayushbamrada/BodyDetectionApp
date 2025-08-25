@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
@@ -42,6 +41,7 @@ data class RepDuration(val repCount: Int, val durationSeconds: Float)
 fun calculateCaloriesBurned(exerciseName: String, totalTimeSeconds: Long): String {
     val exercise = ExerciseDefinitions.ALL_EXERCISES.find { it.name == exerciseName }
     val metValue = exercise?.metValue ?: 3.5
+    // Using a standard average weight for calculation.
     val averageWeightKg = 70
     val totalTimeHours = totalTimeSeconds / 3600.0
     val calories = metValue * averageWeightKg * totalTimeHours
@@ -74,14 +74,23 @@ fun ExerciseReportScreen(
         var totalTime: Long = 0L
 
         if (timestampsList.isNotEmpty()) {
-            val baseTime = exerciseSessionStartTime
-            for (i in timestampsList.indices) {
-                val currentTimestampData = timestampsList[i]
-                val durationMillis = if (i == 0) {
-                    currentTimestampData.timestamp - baseTime
-                } else {
-                    currentTimestampData.timestamp - timestampsList[i - 1].timestamp
-                }
+            // Sort by rep count to ensure correct order.
+            val sortedTimestamps = timestampsList.sortedBy { it.repCount }
+
+            // Calculate duration for the first rep relative to the start time.
+            calculatedRepDurations.add(
+                RepDuration(
+                    repCount = sortedTimestamps[0].repCount,
+                    durationSeconds = (sortedTimestamps[0].timestamp - exerciseSessionStartTime) / 1000f
+                )
+            )
+
+            // Calculate durations for subsequent reps relative to the previous rep.
+            for (i in 1 until sortedTimestamps.size) {
+                val currentTimestampData = sortedTimestamps[i]
+                val previousTimestampData = sortedTimestamps[i - 1]
+                val durationMillis = currentTimestampData.timestamp - previousTimestampData.timestamp
+
                 calculatedRepDurations.add(
                     RepDuration(
                         repCount = currentTimestampData.repCount,
@@ -89,9 +98,11 @@ fun ExerciseReportScreen(
                     )
                 )
             }
-            totalTime = (timestampsList.lastOrNull()?.timestamp ?: baseTime) - baseTime
+            // Total time is the last rep's timestamp minus the overall start time.
+            totalTime = (sortedTimestamps.lastOrNull()?.timestamp ?: exerciseSessionStartTime) - exerciseSessionStartTime
         }
-        calculatedRepDurations to (totalTime / 1000L).coerceAtLeast(0L)
+        val finalDurations = calculatedRepDurations.filter { it.repCount <= finalRepCount }
+        finalDurations to (totalTime / 1000L).coerceAtLeast(0L)
     }
 
     val caloriesBurned = remember(exerciseName, totalWorkoutTimeSeconds) {
@@ -123,6 +134,7 @@ fun ExerciseReportScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Summary Card (Reps, Time, Calories)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -146,6 +158,7 @@ fun ExerciseReportScreen(
                 }
             }
 
+            // Graph Section
             Text(
                 text = "Repetition Durations (seconds)",
                 style = MaterialTheme.typography.titleLarge,
@@ -155,7 +168,6 @@ fun ExerciseReportScreen(
                     .padding(bottom = 12.dp)
                     .align(Alignment.Start)
             )
-
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -180,6 +192,7 @@ fun ExerciseReportScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Finish Button
             Button(
                 onClick = { navController.popBackStack(Screen.Home.route, inclusive = false) },
                 modifier = Modifier
@@ -222,13 +235,19 @@ fun RepDurationBarGraph(repDurations: List<RepDuration>) {
     val barWidthDp = 40.dp
     val spacingDp = 16.dp
     val numReps = repDurations.size
-    val totalWidth = (barWidthDp * numReps) + (spacingDp * (numReps - 1))
+
+    // --- MODIFIED LOGIC ---
+    // Define the width for Y-axis labels here in Dp
+    val yAxisLabelWidthDp = 45.dp
+
+    // Add the Y-axis label width to the total width calculation
+    val totalWidth = (barWidthDp * numReps) + (spacingDp * (numReps + 1)) + yAxisLabelWidthDp
 
     Box(
         modifier = Modifier
             .width(totalWidth)
             .fillMaxHeight()
-            .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 40.dp)
+            .padding(top = 20.dp, bottom = 40.dp)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val maxDuration = repDurations.maxOfOrNull { it.durationSeconds }?.let { ceil(it * 1.2f) }?.coerceAtLeast(5f) ?: 5f
@@ -236,40 +255,62 @@ fun RepDurationBarGraph(repDurations: List<RepDuration>) {
             val durationRange = maxDuration - minDuration
             val safeDurationRange = if (durationRange == 0f) 1f else durationRange
 
-            val yAxisLabelWidth = with(density) { 45.dp.toPx() }
+            // --- MODIFIED ---
+            // Convert the Dp value to Px for use inside the Canvas
+            val yAxisLabelWidth = with(density) { yAxisLabelWidthDp.toPx() }
             val xAxisLabelHeight = with(density) { 30.dp.toPx() }
             val effectiveHeight = size.height - xAxisLabelHeight
             val yAxisDrawEnd = effectiveHeight
             val xAxisDrawStart = yAxisLabelWidth
 
+            // Drawing Y-axis labels and grid lines
             val desiredNumYLabels = 5
             val rawStepY = safeDurationRange / (desiredNumYLabels - 1).coerceAtLeast(1)
-            val stepSizeY = if (rawStepY > 0) {
-                val exponent = floor(log10(rawStepY)).toInt()
-                val factor = when {
-                    rawStepY / (10.0.pow(exponent)) < 2.0 -> 1.0
-                    rawStepY / (10.0.pow(exponent)) < 5.0 -> 2.0
-                    else -> 5.0
-                }
-                (factor * (10.0.pow(exponent))).toFloat()
-            } else { 1f }
+            val exponent = floor(log10(rawStepY.toDouble())).toInt()
+            val factor = when {
+                rawStepY / (10.0.pow(exponent)) < 2.0 -> 1.0
+                rawStepY / (10.0.pow(exponent)) < 5.0 -> 2.0
+                else -> 5.0
+            }
+            val stepSizeY = (factor * (10.0.pow(exponent))).toFloat()
 
             var currentYLabelValue = 0f
             while (currentYLabelValue <= maxDuration) {
                 val y = yAxisDrawEnd - ((currentYLabelValue - minDuration) / safeDurationRange) * effectiveHeight
                 if (y.isFinite()) {
                     drawLine(color = gridColor, start = Offset(xAxisDrawStart, y), end = Offset(size.width, y), strokeWidth = 1f)
-                    drawContext.canvas.nativeCanvas.drawText("%.1f".format(currentYLabelValue), xAxisDrawStart - 8.dp.toPx(), y + 4.dp.toPx(), Paint().apply { color = onSurfaceColor.toArgb(); textAlign = Paint.Align.RIGHT; textSize = with(density) { 12.sp.toPx() } })
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "%.1f".format(currentYLabelValue),
+                        xAxisDrawStart - 8.dp.toPx(),
+                        y + 4.dp.toPx(),
+                        Paint().apply {
+                            color = onSurfaceColor.toArgb()
+                            textAlign = Paint.Align.RIGHT
+                            textSize = with(density) { 12.sp.toPx() }
+                        }
+                    )
                 }
                 currentYLabelValue += stepSizeY
             }
 
             val barWidthPx = with(density) { barWidthDp.toPx() }
             val spacingPx = with(density) { spacingDp.toPx() }
-            val repLabelPaint = Paint().apply { color = onSurfaceColor.toArgb(); textAlign = Paint.Align.CENTER; textSize = with(density) { 14.sp.toPx() }; isFakeBoldText = true }
-            val durationLabelPaint = Paint().apply { color = onSurfaceColor.toArgb(); textAlign = Paint.Align.CENTER; textSize = with(density) { 12.sp.toPx() } }
+            val repLabelPaint = Paint().apply {
+                color = onSurfaceColor.toArgb()
+                textAlign = Paint.Align.CENTER
+                textSize = with(density) { 14.sp.toPx() }
+                isFakeBoldText = true
+            }
+            val durationLabelPaint = Paint().apply {
+                color = onSurfaceColor.toArgb()
+                textAlign = Paint.Align.CENTER
+                textSize = with(density) { 12.sp.toPx() }
+            }
 
-            var currentXPosition = xAxisDrawStart
+            // --- MODIFIED ---
+            // Start drawing from the beginning of the defined area
+            var currentXPosition = xAxisDrawStart + (spacingPx / 2) // Start with half spacing for padding
+
             repDurations.forEach { repData ->
                 val barHeight = ((repData.durationSeconds - minDuration) / safeDurationRange) * effectiveHeight
                 val barTopLeftY = yAxisDrawEnd - barHeight
@@ -280,6 +321,7 @@ fun RepDurationBarGraph(repDurations: List<RepDuration>) {
                     size = Size(barWidthPx, barHeight)
                 )
 
+                // Draw duration label above the bar
                 drawContext.canvas.nativeCanvas.drawText(
                     "%.1fs".format(repData.durationSeconds),
                     currentXPosition + barWidthPx / 2,
@@ -287,6 +329,7 @@ fun RepDurationBarGraph(repDurations: List<RepDuration>) {
                     durationLabelPaint
                 )
 
+                // Draw rep count label below the bar
                 drawContext.canvas.nativeCanvas.drawText(
                     "${repData.repCount}",
                     currentXPosition + barWidthPx / 2,

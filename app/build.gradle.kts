@@ -98,6 +98,8 @@ dependencies {
     implementation(libs.genai.common)
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-gif:2.6.0")
+    implementation(libs.androidx.animation.android)
+    implementation(libs.androidx.animation.core.android)
 
     // Testing dependencies
     testImplementation(libs.junit)

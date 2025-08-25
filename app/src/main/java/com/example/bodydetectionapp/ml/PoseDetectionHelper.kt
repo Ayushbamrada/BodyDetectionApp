@@ -60,7 +60,8 @@ class PoseDetectionHelper(
                 AngleCalculator.LandmarkIndices.landmarkNameMapping.forEach { (index, name) ->
                     if (index < landmarksList.size) {
                         val mpLandmark = landmarksList[index]
-                        landmarkMap[name] = Landmark(mpLandmark.x(), mpLandmark.y(), mpLandmark.z())
+                        landmarkMap[name] = Landmark(mpLandmark.x(), mpLandmark.y(), mpLandmark.z(), mpLandmark.visibility().orElse(0f)
+                        )
                     }
                 }
 
