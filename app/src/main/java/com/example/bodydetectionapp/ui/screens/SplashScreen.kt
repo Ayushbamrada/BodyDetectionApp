@@ -1,20 +1,16 @@
+//
 //package com.example.bodydetectionapp.ui.screens
 //
 //import androidx.compose.animation.AnimatedVisibility
 //import androidx.compose.animation.core.*
 //import androidx.compose.animation.fadeIn
 //import androidx.compose.animation.slideInVertically
-//import androidx.compose.foundation.Canvas
 //import androidx.compose.foundation.Image
-//import androidx.compose.foundation.background
 //import androidx.compose.foundation.layout.*
-//import androidx.compose.material3.MaterialTheme
 //import androidx.compose.material3.Text
 //import androidx.compose.runtime.*
 //import androidx.compose.ui.Alignment
 //import androidx.compose.ui.Modifier
-//import androidx.compose.ui.geometry.Offset
-//import androidx.compose.ui.graphics.Brush
 //import androidx.compose.ui.graphics.Color
 //import androidx.compose.ui.res.painterResource
 //import androidx.compose.ui.text.font.FontWeight
@@ -25,84 +21,8 @@
 //import com.example.bodydetectionapp.R
 //import com.example.bodydetectionapp.data.repository.UserRepository
 //import com.example.bodydetectionapp.navigation.Screen
-//import com.example.bodydetectionapp.ui.theme.RippleTeal
+//import com.example.bodydetectionapp.ui.components.AppBackground
 //import kotlinx.coroutines.delay
-//import kotlin.math.pow
-//import kotlin.math.sqrt
-//import kotlin.random.Random
-//
-//// --- A "pulsing" nerve effect background ---
-//@Composable
-//private fun NeuralNetworkBackground() {
-//    val particles = remember {
-//        List(70) {
-//            Particle(
-//                x = Random.nextFloat(),
-//                y = Random.nextFloat(),
-//                radius = Random.nextFloat() * 1.5f + 1f
-//            )
-//        }
-//    }
-//
-//    val infiniteTransition = rememberInfiniteTransition(label = "background_animation")
-//
-//    // Animate a pulse wave that expands from the center and restarts
-//    val pulse by infiniteTransition.animateFloat(
-//        initialValue = 0f,
-//        targetValue = 1.5f, // Pulse expands beyond the screen edges
-//        animationSpec = infiniteRepeatable(
-//            animation = tween(durationMillis = 3000, easing = LinearEasing),
-//            repeatMode = RepeatMode.Restart
-//        ), label = "pulse_progress"
-//    )
-//
-//    Canvas(modifier = Modifier.fillMaxSize()) {
-//        val centerX = size.width / 2
-//        val centerY = size.height / 2
-//        val maxDist = sqrt(centerX.pow(2) + centerY.pow(2))
-//
-//        particles.forEach { particle ->
-//            val particlePos = Offset(particle.x * size.width, particle.y * size.height)
-//            val distFromCenter = sqrt((particlePos.x - centerX).pow(2) + (particlePos.y - centerY).pow(2)) / maxDist
-//
-//            // Brightness depends on the particle's distance to the expanding pulse wave
-//            val pulseProximity = 1f - (kotlin.math.abs(pulse - distFromCenter))
-//            val brightness = (pulseProximity.pow(10) * 0.8f).coerceIn(0.05f, 0.8f)
-//
-//            // Draw the nodes (particles)
-//            drawCircle(
-//                color = Color.White,
-//                center = particlePos,
-//                radius = particle.radius,
-//                alpha = brightness
-//            )
-//
-//            // Draw lines to nearby particles
-//            particles.forEach { otherParticle ->
-//                val distance = particle.distanceTo(otherParticle, size.width, size.height)
-//                if (distance < size.width * 0.2f) {
-//                    val otherPos = Offset(otherParticle.x * size.width, otherParticle.y * size.height)
-//                    drawLine(
-//                        color = Color.White,
-//                        start = particlePos,
-//                        end = otherPos,
-//                        strokeWidth = 0.5f,
-//                        alpha = brightness * 0.5f // Line brightness matches node brightness
-//                    )
-//                }
-//            }
-//        }
-//    }
-//}
-//
-//private data class Particle(val x: Float, val y: Float, val radius: Float) {
-//    fun distanceTo(other: Particle, width: Float, height: Float): Float {
-//        val dx = (x - other.x) * width
-//        val dy = (y - other.y) * height
-//        return sqrt(dx * dx + dy * dy)
-//    }
-//}
-//
 //
 //@Composable
 //fun SplashScreen(navController: NavController, userRepository: UserRepository) {
@@ -110,12 +30,13 @@
 //    var bottomContentVisible by remember { mutableStateOf(false) }
 //
 //    LaunchedEffect(Unit) {
-//        delay(500) // Initial delay before animations start
+//        delay(500)
 //        topTextVisible = true
-//        delay(500) // Stagger the animation of the bottom content
+//        delay(500)
 //        bottomContentVisible = true
-//        delay(3000) // How long the content stays on screen
+//        delay(3000)
 //
+//        // Using your original, stable navigation logic
 //        val destination = if (userRepository.hasCompletedOnboarding()) {
 //            Screen.Home.route
 //        } else {
@@ -126,25 +47,8 @@
 //        }
 //    }
 //
-//    Box(
-//        modifier = Modifier
-//            .fillMaxSize()
-//            .background(
-//                brush = Brush.linearGradient(
-//                    colors = listOf(
-//                        RippleTeal.copy(alpha = 0.8f),
-//                        Color(0xFF003D4D) // A darker, richer teal
-//                    ),
-//                    start = Offset(0f, 0f),
-//                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-//                )
-//            ),
-//        contentAlignment = Alignment.Center
-//    ) {
-//        // --- Animated Neural Network Background ---
-//        NeuralNetworkBackground()
-//
-//        // --- Animated Content ---
+//    // Use the single, consistent AppBackground for the entire screen
+//    AppBackground {
 //        Column(
 //            horizontalAlignment = Alignment.CenterHorizontally,
 //            modifier = Modifier
@@ -152,7 +56,6 @@
 //                .padding(horizontal = 24.dp, vertical = 60.dp),
 //            verticalArrangement = Arrangement.SpaceBetween
 //        ) {
-//            // Animate top text sliding in from the top
 //            AnimatedVisibility(
 //                visible = topTextVisible,
 //                enter = fadeIn(animationSpec = tween(1000)) +
@@ -170,7 +73,6 @@
 //                )
 //            }
 //
-//            // Animate bottom content sliding in from the bottom
 //            AnimatedVisibility(
 //                visible = bottomContentVisible,
 //                enter = fadeIn(animationSpec = tween(1000)) +
@@ -189,7 +91,7 @@
 //                        modifier = Modifier.padding(bottom = 8.dp)
 //                    )
 //                    Image(
-//                        painter = painterResource(id = R.drawable.ripple_healthcare_logo),
+//                        painter = painterResource(id = R.drawable.logo),
 //                        contentDescription = "Company Logo",
 //                        modifier = Modifier.fillMaxWidth(0.7f)
 //                    )
@@ -200,28 +102,60 @@
 //}
 package com.example.bodydetectionapp.ui.screens
 
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.ImageLoader
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import com.example.bodydetectionapp.R
 import com.example.bodydetectionapp.data.repository.UserRepository
 import com.example.bodydetectionapp.navigation.Screen
 import com.example.bodydetectionapp.ui.components.AppBackground
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlin.coroutines.coroutineContext
+
+// --- NEW: A dedicated composable to play the GIF ---
+@Composable
+fun GifPlayer(gifId: Int, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val imageLoader = ImageLoader.Builder(context)
+        .components {
+            if (Build.VERSION.SDK_INT >= 28) {
+                add(ImageDecoderDecoder.Factory())
+            } else {
+                add(GifDecoder.Factory())
+            }
+        }
+        .build()
+
+    Image(
+        painter = rememberAsyncImagePainter(gifId, imageLoader),
+        contentDescription = "Exercise Animation",
+        modifier = modifier
+    )
+}
+
 
 @Composable
 fun SplashScreen(navController: NavController, userRepository: UserRepository) {
@@ -233,35 +167,32 @@ fun SplashScreen(navController: NavController, userRepository: UserRepository) {
         topTextVisible = true
         delay(500)
         bottomContentVisible = true
-        delay(3000)
+        delay(4000) // Increased delay to let the animation play
 
-        // Using your original, stable navigation logic
         val destination = if (userRepository.hasCompletedOnboarding()) {
             Screen.Home.route
         } else {
             Screen.Onboarding.route
         }
-        navController.navigate(destination) {
-            popUpTo(Screen.Splash.route) { inclusive = true }
+        if (coroutineContext.isActive) {
+            navController.navigate(destination) {
+                popUpTo(Screen.Splash.route) { inclusive = true }
+            }
         }
     }
 
-    // Use the single, consistent AppBackground for the entire screen
     AppBackground {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 60.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .safeDrawingPadding()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
+            // Top Text animates in
             AnimatedVisibility(
                 visible = topTextVisible,
-                enter = fadeIn(animationSpec = tween(1000)) +
-                        slideInVertically(
-                            initialOffsetY = { -it / 2 },
-                            animationSpec = tween(1000, easing = EaseOutCubic)
-                        )
+                enter = fadeIn(animationSpec = tween(1000)) + slideInVertically(initialOffsetY = { -it })
             ) {
                 Text(
                     text = "Your AI Exercise App",
@@ -269,30 +200,42 @@ fun SplashScreen(navController: NavController, userRepository: UserRepository) {
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 60.dp)
                 )
             }
 
+            // The GIF player takes up the middle space
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                GifPlayer(
+                    gifId = R.raw.splashnew_gif,
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f)
+                        .clip(CircleShape) // Optional: makes the GIF circular
+                )
+            }
+
+            // Bottom Logo animates in
             AnimatedVisibility(
                 visible = bottomContentVisible,
-                enter = fadeIn(animationSpec = tween(1000)) +
-                        slideInVertically(
-                            initialOffsetY = { it / 2 },
-                            animationSpec = tween(1000, easing = EaseOutCubic)
-                        )
+                enter = fadeIn(animationSpec = tween(1000)) + slideInVertically(initialOffsetY = { it })
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(bottom = 60.dp)
+                ) {
                     Text(
                         text = "Powered by",
                         color = Color.White.copy(alpha = 0.8f),
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     Image(
                         painter = painterResource(id = R.drawable.logo),
                         contentDescription = "Company Logo",
-                        modifier = Modifier.fillMaxWidth(0.7f)
+                        modifier = Modifier.fillMaxWidth(0.6f)
                     )
                 }
             }
