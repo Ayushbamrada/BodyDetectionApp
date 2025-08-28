@@ -204,6 +204,7 @@ fun SplashScreen(navController: NavController, userRepository: UserRepository) {
                 )
             }
 
+
             // The GIF player takes up the middle space
             Box(
                 modifier = Modifier.weight(1f),

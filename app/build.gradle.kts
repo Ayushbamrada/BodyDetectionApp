@@ -101,6 +101,7 @@ dependencies {
     implementation(libs.androidx.animation.android)
     implementation(libs.androidx.animation.core.android)
     implementation(libs.androidx.animation.core.android)
+    implementation(libs.androidx.ink.geometry.android)
 
     // Testing dependencies
     testImplementation(libs.junit)

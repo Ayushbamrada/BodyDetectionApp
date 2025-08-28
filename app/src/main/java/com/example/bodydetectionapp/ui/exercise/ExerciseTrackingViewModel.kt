@@ -251,9 +251,11 @@ class ExerciseTrackingViewModel(application: Application) : AndroidViewModel(app
             _repCount.value = count
             // Speak a random positive message on a successful rep
             speakMessage(positiveFeedback.random(), forceSpeak = true)
-
-            _exerciseStartTime.value?.let {
-                repTimestamps.add(RepTimestamp(count, System.currentTimeMillis()))
+//added a safety check
+            if (count > 0) {
+                _exerciseStartTime.value?.let {
+                    repTimestamps.add(RepTimestamp(count, System.currentTimeMillis()))
+                }
             }
             if (repGoal > 0 && count >= repGoal) {
                 finishExercise("Goal Reached!")
