@@ -166,6 +166,7 @@ fun OnboardingScreen(
                         onboardingViewModel.saveUserDetails(name, gender, age.toInt(), weightInKg, heightInCm)
                         onContinueClicked()
                     }
+                    
                 },
                 enabled = isNextEnabled,
                 modifier = Modifier
